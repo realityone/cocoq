@@ -26,6 +26,10 @@ go run ./cmd/cocoq server run --addr 127.0.0.1:8888 --har-file /tmp/cocoq.har
 
 The proxy creates its local CA under `~/.cocoq/`. Trust that CA in clients that need HTTPS MITM interception, then point the client at `127.0.0.1:8888` as its HTTP/HTTPS proxy.
 
+## Acknowledgements
+
+Thanks to [`claude-code-cache-fix`](https://github.com/cnighswonger/claude-code-cache-fix) for the original cache-fix research.
+
 ## Development
 
 ```sh
