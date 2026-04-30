@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"cocoq/server/database/dbrt"
-
 	"github.com/elazarl/goproxy"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -20,11 +18,10 @@ var anthropicProxyDomains = sets.New(
 
 type anthropicProxy struct {
 	ca tls.Certificate
-	db *dbrt.Client
 }
 
-func newAnthropicProxy(ca tls.Certificate, db *dbrt.Client) *anthropicProxy {
-	return &anthropicProxy{ca: ca, db: db}
+func newAnthropicProxy(ca tls.Certificate) *anthropicProxy {
+	return &anthropicProxy{ca: ca}
 }
 
 func (p *anthropicProxy) install(proxy *goproxy.ProxyHttpServer) {
@@ -56,18 +53,6 @@ func (p *anthropicProxy) install(proxy *goproxy.ProxyHttpServer) {
 			}).Info("rejected anthropic event logging request")
 			return req, goproxy.NewResponse(req, "application/json", http.StatusNotFound, http.StatusText(http.StatusNotFound))
 		})
-	// Reject oauth requests
-	proxy.OnRequest(goproxy.DstHostIs("platform.claude.com"), PathInSet(sets.New("/v1/oauth/token"))).
-		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			logrus.WithFields(logrus.Fields{
-				"session": ctx.Session,
-				"service": "anthropic",
-				"host":    req.Host,
-				"url":     req.URL.String(),
-				"method":  req.Method,
-			}).Info("rejected anthropic oauth request")
-			return req, goproxy.NewResponse(req, "application/json", http.StatusNotFound, http.StatusText(http.StatusNotFound))
-		})
 	// Handle API requests
 	proxy.OnRequest(DstHostInSet(anthropicProxyDomains)).DoFunc(p.handleAPIRequest)
 }
@@ -90,11 +75,5 @@ func anthropicEventLoggingCondition() goproxy.ReqConditionFunc {
 func DstHostInSet(hostSet sets.Set[string]) goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		return hostSet.Has(strings.ToLower(req.URL.Hostname()))
-	}
-}
-
-func PathInSet(pathSet sets.Set[string]) goproxy.ReqConditionFunc {
-	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
-		return pathSet.Has(strings.ToLower(req.URL.Path))
 	}
 }

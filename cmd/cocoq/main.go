@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"cocoq/server"
-	"cocoq/server/database/dbcmd"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -27,18 +26,12 @@ var rootCmd = &cobra.Command{
 }
 
 var serverAddr string
-var databasePath string
 var serverHARFile string
 var serverVerbose bool
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Server commands",
-}
-
-var dbCmd = &cobra.Command{
-	Use:   "db",
-	Short: "Database commands",
 }
 
 var serverRunCmd = &cobra.Command{
@@ -49,7 +42,6 @@ var serverRunCmd = &cobra.Command{
 
 		srv, err := server.New(server.Config{
 			Addr:    serverAddr,
-			DBPath:  databasePath,
 			HARFile: serverHARFile,
 			Verbose: serverVerbose,
 			Logger:  logger,
@@ -64,12 +56,8 @@ var serverRunCmd = &cobra.Command{
 
 func init() {
 	serverRunCmd.Flags().StringVar(&serverAddr, "addr", "127.0.0.1:8888", "HTTP listen address for proxy server")
-	serverRunCmd.Flags().StringVar(&databasePath, "db-path", "", "database path, defaults to ~/.cocoq/database")
 	serverRunCmd.Flags().StringVar(&serverHARFile, "har-file", "", "write accepted proxy sessions to this HAR file")
 	serverRunCmd.Flags().BoolVar(&serverVerbose, "verbose", false, "enable verbose proxy logging")
-	dbCmd.PersistentFlags().StringVar(&databasePath, "db-path", "", "database path, defaults to ~/.cocoq/database")
 	serverCmd.AddCommand(serverRunCmd)
-	dbcmd.Register(dbCmd, &databasePath)
 	rootCmd.AddCommand(serverCmd)
-	rootCmd.AddCommand(dbCmd)
 }

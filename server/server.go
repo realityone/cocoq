@@ -7,9 +7,6 @@ import (
 	"os"
 	"time"
 
-	serverdb "cocoq/server/database"
-	"cocoq/server/database/dbrt"
-
 	"github.com/elazarl/goproxy"
 	"github.com/elazarl/goproxy/ext/har"
 	"github.com/pkg/errors"
@@ -24,7 +21,6 @@ const (
 
 type Config struct {
 	Addr    string
-	DBPath  string
 	HARFile string
 	Verbose bool
 	Logger  *logrus.Logger
@@ -34,7 +30,6 @@ type Server struct {
 	addr   string
 	logger *logrus.Logger
 	http   *http.Server
-	db     *dbrt.Client
 }
 
 func New(cfg Config) (*Server, error) {
@@ -46,11 +41,6 @@ func New(cfg Config) (*Server, error) {
 	ca, err := loadOrCreateCA()
 	if err != nil {
 		return nil, errors.Wrap(err, "load or create root CA")
-	}
-
-	db, err := serverdb.OpenClient(cfg.DBPath)
-	if err != nil {
-		return nil, errors.Wrap(err, "open database")
 	}
 
 	proxy := goproxy.NewProxyHttpServer()
@@ -83,7 +73,7 @@ func New(cfg Config) (*Server, error) {
 
 	proxy.Verbose = cfg.Verbose
 	proxy.Logger = &proxyLogger{logger: logger}
-	anthropicProxy := newAnthropicProxy(ca, db)
+	anthropicProxy := newAnthropicProxy(ca)
 	anthropicProxy.install(proxy)
 
 	proxy.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
@@ -108,7 +98,6 @@ func New(cfg Config) (*Server, error) {
 		addr:   cfg.Addr,
 		logger: logger,
 		http:   httpServer,
-		db:     db,
 	}, nil
 }
 
@@ -129,11 +118,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.http != nil {
 		if err := s.http.Shutdown(ctx); err != nil {
 			return errors.Wrap(err, "shutdown HTTP server")
-		}
-	}
-	if s.db != nil {
-		if err := s.db.Close(); err != nil {
-			return errors.Wrap(err, "close database")
 		}
 	}
 	return nil
