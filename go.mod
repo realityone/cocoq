@@ -3,7 +3,7 @@ module cocoq
 go 1.26.1
 
 require (
-	github.com/elazarl/goproxy v1.8.3
+	github.com/elazarl/goproxy v1.8.4-0.20260429163546-e493e1c4c552
 	github.com/elazarl/goproxy/ext v0.0.0-20260327201742-eeb2adb11cb5
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
