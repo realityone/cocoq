@@ -1,0 +1,3 @@
+[submodule "claude-code-cache-fix"]
+	path = claude-code-cache-fix
+	url = git@github.com:cnighswonger/claude-code-cache-fix.git
