@@ -26,7 +26,14 @@ type anthropicProxy struct {
 }
 
 func NewAnthropicProxy(ca tls.Certificate) *anthropicProxy {
-	return &anthropicProxy{ca: ca}
+	p := &anthropicProxy{
+		ca: ca,
+	}
+	p.onRequest = append(
+		p.onRequest,
+		(&example{}).HandleRequest,
+	)
+	return p
 }
 
 func (p *anthropicProxy) Domains() sets.Set[string] {
