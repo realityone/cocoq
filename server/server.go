@@ -76,17 +76,17 @@ func New(cfg Config) (*Server, error) {
 	anthropicProxy := newAnthropicProxy(ca)
 	anthropicProxy.install(proxy)
 
-	proxy.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		logrus.WithFields(requestLogFields(req, ctx)).Info("proxy request")
-		return req, nil
-	})
-	proxy.OnResponse().DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
-		if resp == nil {
-			return nil
-		}
-		logrus.WithFields(responseLogFields(resp, ctx)).Info("proxy response")
-		return resp
-	})
+	// Any request that reaches this point is not handled by any proxy service, so we reject it to prevent unintended proxying.
+	proxy.OnRequest().
+		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+			logrus.WithFields(requestLogFields(req, ctx)).Infof("Rejecting plaintext request to %s", req.URL.String())
+			return req, goproxy.NewResponse(req, "application/json", http.StatusNotAcceptable, http.StatusText(http.StatusNotAcceptable))
+		})
+	proxy.OnRequest().
+		HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
+			logrus.WithFields(requestLogFields(ctx.Req, ctx)).Infof("Rejecting connect to %s", host)
+			return goproxy.RejectConnect, host
+		})
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,

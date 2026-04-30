@@ -10,40 +10,37 @@ import (
 // abortIndex represents a typical value used in abort functions.
 const abortIndex int8 = math.MaxInt8 >> 1
 
-type RequestHandlersChain []func(*OnRequestContext)
-type OnRequestContext struct {
+type OnRequestTuple struct {
 	ProxyCtx *goproxy.ProxyCtx
 	Request  *http.Request
 
-	index    int8
-	handlers RequestHandlersChain
+	PostRequest  *http.Request
+	PostResponse *http.Response
 }
 
-func (c *OnRequestContext) Next() {
-	c.index++
-	for c.index < safeInt8(len(c.handlers)) {
-		if c.handlers[c.index] != nil {
-			c.handlers[c.index](c)
-		}
-		c.index++
-	}
-}
-
-// IsAborted returns true if the current context was aborted.
-func (c *OnRequestContext) IsAborted() bool {
-	return c.index >= abortIndex
-}
-
-type ResponseHandlersChain []func(*OnResponseContext)
-type OnResponseContext struct {
+type OnResponseTuple struct {
 	ProxyCtx *goproxy.ProxyCtx
 	Response *http.Response
 
-	index    int8
-	handlers ResponseHandlersChain
+	PostResponse *http.Response
 }
 
-func (c *OnResponseContext) Next() {
+type OnContext[T any] struct {
+	Tuple T
+
+	index    int8
+	handlers HandlersChain[T]
+}
+
+func newContext[T any](val T, handlers ...HandlerFunc[T]) *OnContext[T] {
+	return &OnContext[T]{
+		Tuple:    val,
+		index:    -1,
+		handlers: handlers,
+	}
+}
+
+func (c *OnContext[T]) Next() {
 	c.index++
 	for c.index < safeInt8(len(c.handlers)) {
 		if c.handlers[c.index] != nil {
@@ -54,7 +51,7 @@ func (c *OnResponseContext) Next() {
 }
 
 // IsAborted returns true if the current context was aborted.
-func (c *OnResponseContext) IsAborted() bool {
+func (c *OnContext[T]) IsAborted() bool {
 	return c.index >= abortIndex
 }
 
@@ -65,3 +62,39 @@ func safeInt8(n int) int8 {
 	}
 	return int8(n)
 }
+
+func handleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[OnRequestTuple]) (*http.Request, *http.Response) {
+	ctx := newContext(OnRequestTuple{
+		ProxyCtx: proxyCtx,
+		Request:  req,
+	}, handlers...)
+	ctx.Next()
+
+	postRequest := ctx.Tuple.PostRequest
+	if postRequest == nil {
+		postRequest = ctx.Tuple.Request
+	}
+	return postRequest, ctx.Tuple.PostResponse
+}
+
+func handleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[OnResponseTuple]) *http.Response {
+	ctx := newContext(OnResponseTuple{
+		ProxyCtx: proxyCtx,
+		Response: resp,
+	}, handlers...)
+	ctx.Next()
+
+	if ctx.Tuple.PostResponse != nil {
+		return ctx.Tuple.PostResponse
+	}
+	return ctx.Tuple.Response
+}
+
+type HandlerFunc[T any] func(*OnContext[T])
+type HandlersChain[T any] []HandlerFunc[T]
+
+type RequestHandlersChain = HandlersChain[OnRequestTuple]
+type ResponseHandlersChain = HandlersChain[OnResponseTuple]
+
+type OnRequestContext = OnContext[OnRequestTuple]
+type OnResponseContext = OnContext[OnResponseTuple]

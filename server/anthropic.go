@@ -18,6 +18,9 @@ var anthropicProxyDomains = sets.New(
 
 type anthropicProxy struct {
 	ca tls.Certificate
+
+	onRequest  []HandlerFunc[OnRequestTuple]
+	onResponse []HandlerFunc[OnResponseTuple]
 }
 
 func newAnthropicProxy(ca tls.Certificate) *anthropicProxy {
@@ -27,19 +30,6 @@ func newAnthropicProxy(ca tls.Certificate) *anthropicProxy {
 func (p *anthropicProxy) install(proxy *goproxy.ProxyHttpServer) {
 	logrus.Infof("Installing Anthropic proxy for domains: %+v", anthropicProxyDomains.UnsortedList())
 	proxy.OnRequest(DstHostInSet(anthropicProxyDomains)).HandleConnect(newMitmConnectAction(p.ca))
-
-	// Reject plaintext requests to non-Anthropic domains
-	proxy.OnRequest(goproxy.Not(DstHostInSet(anthropicProxyDomains))).
-		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			logrus.WithFields(requestLogFields(req, ctx)).Infof("Rejecting plaintext request to %s", req.URL.String())
-			return req, goproxy.NewResponse(req, "application/json", http.StatusNotAcceptable, http.StatusText(http.StatusNotAcceptable))
-		})
-	// Reject connect requests to non-Anthropic domains
-	proxy.OnRequest(goproxy.Not(DstHostInSet(anthropicProxyDomains))).
-		HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
-			logrus.WithFields(requestLogFields(ctx.Req, ctx)).Infof("Rejecting connect to %s", host)
-			return goproxy.RejectConnect, host
-		})
 
 	// Reject event logging requests
 	proxy.OnRequest(anthropicEventLoggingCondition()).
@@ -53,14 +43,17 @@ func (p *anthropicProxy) install(proxy *goproxy.ProxyHttpServer) {
 			}).Info("rejected anthropic event logging request")
 			return req, goproxy.NewResponse(req, "application/json", http.StatusNotFound, http.StatusText(http.StatusNotFound))
 		})
-	// Handle API requests
-	proxy.OnRequest(DstHostInSet(anthropicProxyDomains)).DoFunc(p.handleAPIRequest)
-	proxy.OnResponse().DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response { return resp })
+	// Handle /v1/messages API requests
+	proxy.OnRequest(anthropicV1MessagesCondition()).DoFunc(p.handleRequest)
+	proxy.OnResponse(anthropicV1MessagesCondition()).DoFunc(p.handleResponse)
 }
 
-func (p *anthropicProxy) handleAPIRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-	logrus.WithFields(requestLogFields(req, ctx)).Infof("Handling API request to %s", req.URL.String())
-	return req, nil
+func (p *anthropicProxy) handleRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+	return handleOnRequest(req, ctx, p.onRequest...)
+}
+
+func (p *anthropicProxy) handleResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+	return handleOnResponse(resp, ctx, p.onResponse...)
 }
 
 func anthropicEventLoggingCondition() goproxy.ReqConditionFunc {
@@ -69,7 +62,15 @@ func anthropicEventLoggingCondition() goproxy.ReqConditionFunc {
 		"/api/event_logging/v2/batch",
 	)
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
-		return strings.ToLower(req.URL.Hostname()) == "api.anthropic.com" && paths.Has(req.URL.Path)
+		return strings.ToLower(req.URL.Hostname()) == "api.anthropic.com" &&
+			paths.Has(strings.ToLower(req.URL.Path))
+	}
+}
+
+func anthropicV1MessagesCondition() goproxy.ReqConditionFunc {
+	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
+		return strings.ToLower(req.URL.Hostname()) == "api.anthropic.com" &&
+			strings.ToLower(req.URL.Path) == "/v1/messages"
 	}
 }
 
