@@ -55,6 +55,7 @@ func (p *anthropicProxy) install(proxy *goproxy.ProxyHttpServer) {
 		})
 	// Handle API requests
 	proxy.OnRequest(DstHostInSet(anthropicProxyDomains)).DoFunc(p.handleAPIRequest)
+	proxy.OnResponse().DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response { return resp })
 }
 
 func (p *anthropicProxy) handleAPIRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
