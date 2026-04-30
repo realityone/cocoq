@@ -9,7 +9,7 @@ import (
 func TestOnRequestContextNext(t *testing.T) {
 	req := &http.Request{Method: http.MethodPost}
 	ctx := &OnRequestContext{
-		Tuple: OnRequestTuple{
+		Tuple: reqCtx{
 			Request: req,
 		},
 		index: -1,
@@ -42,7 +42,7 @@ func TestOnRequestContextNext(t *testing.T) {
 func TestOnResponseContextNext(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusAccepted}
 	ctx := &OnResponseContext{
-		Tuple: OnResponseTuple{
+		Tuple: respCtx{
 			Response: resp,
 		},
 		index: -1,

@@ -10,7 +10,7 @@ import (
 // abortIndex represents a typical value used in abort functions.
 const abortIndex int8 = math.MaxInt8 >> 1
 
-type OnRequestTuple struct {
+type reqCtx struct {
 	ProxyCtx *goproxy.ProxyCtx
 	Request  *http.Request
 
@@ -18,7 +18,7 @@ type OnRequestTuple struct {
 	PostResponse *http.Response
 }
 
-type OnResponseTuple struct {
+type respCtx struct {
 	ProxyCtx *goproxy.ProxyCtx
 	Response *http.Response
 
@@ -63,8 +63,8 @@ func safeInt8(n int) int8 {
 	return int8(n)
 }
 
-func handleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[OnRequestTuple]) (*http.Request, *http.Response) {
-	ctx := newContext(OnRequestTuple{
+func handleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[reqCtx]) (*http.Request, *http.Response) {
+	ctx := newContext(reqCtx{
 		ProxyCtx: proxyCtx,
 		Request:  req,
 	}, handlers...)
@@ -77,8 +77,8 @@ func handleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...
 	return postRequest, ctx.Tuple.PostResponse
 }
 
-func handleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[OnResponseTuple]) *http.Response {
-	ctx := newContext(OnResponseTuple{
+func handleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[respCtx]) *http.Response {
+	ctx := newContext(respCtx{
 		ProxyCtx: proxyCtx,
 		Response: resp,
 	}, handlers...)
@@ -93,8 +93,8 @@ func handleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers 
 type HandlerFunc[T any] func(*OnContext[T])
 type HandlersChain[T any] []HandlerFunc[T]
 
-type RequestHandlersChain = HandlersChain[OnRequestTuple]
-type ResponseHandlersChain = HandlersChain[OnResponseTuple]
+type RequestHandlersChain = HandlersChain[reqCtx]
+type ResponseHandlersChain = HandlersChain[respCtx]
 
-type OnRequestContext = OnContext[OnRequestTuple]
-type OnResponseContext = OnContext[OnResponseTuple]
+type OnRequestContext = OnContext[reqCtx]
+type OnResponseContext = OnContext[respCtx]
