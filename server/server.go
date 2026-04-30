@@ -51,6 +51,18 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	proxy := goproxy.NewProxyHttpServer()
+	proxy.Verbose = cfg.Verbose
+	proxy.Logger = &proxyLogger{logger: logger}
+	proxyServices := []ProxyService{
+		newAnthropicProxy(ca),
+		newExampleProxy(ca),
+	}
+	proxyDomains := sets.New[string]()
+	for _, ps := range proxyServices {
+		proxyDomains = proxyDomains.Union(ps.Domains())
+		ps.install(proxy)
+	}
+
 	if cfg.HARFile != "" {
 		harLogger := har.NewLogger(
 			func(entries []har.Entry) {
@@ -74,29 +86,17 @@ func New(cfg Config) (*Server, error) {
 			har.WithExportInterval(5*time.Second),
 			har.WithExportThreshold(32),
 		)
-		proxy.OnRequest().DoFunc(harLogger.OnRequest)
-		proxy.OnResponse().DoFunc(harLogger.OnResponse)
-	}
-
-	proxy.Verbose = cfg.Verbose
-	proxy.Logger = &proxyLogger{logger: logger}
-	proxyServices := []ProxyService{
-		newAnthropicProxy(ca),
-		newExampleProxy(ca),
-	}
-	excludeDomains := sets.New[string]()
-	for _, ps := range proxyServices {
-		excludeDomains = excludeDomains.Union(ps.Domains())
-		ps.install(proxy)
+		proxy.OnRequest(DstHostInSet(proxyDomains)).DoFunc(harLogger.OnRequest)
+		proxy.OnResponse(DstHostInSet(proxyDomains)).DoFunc(harLogger.OnResponse)
 	}
 
 	// Any request that reaches this point is not handled by any proxy service, so we reject it to prevent unintended proxying.
-	proxy.OnRequest(goproxy.Not(DstHostInSet(excludeDomains))).
+	proxy.OnRequest(goproxy.Not(DstHostInSet(proxyDomains))).
 		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 			logrus.WithFields(requestLogFields(req, ctx)).Infof("Rejecting plaintext request to %s", req.URL.String())
 			return req, goproxy.NewResponse(req, "application/json", http.StatusNotAcceptable, http.StatusText(http.StatusNotAcceptable))
 		})
-	proxy.OnRequest(goproxy.Not(DstHostInSet(excludeDomains))).
+	proxy.OnRequest(goproxy.Not(DstHostInSet(proxyDomains))).
 		HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
 			logrus.WithFields(requestLogFields(ctx.Req, ctx)).Infof("Rejecting connect to %s", host)
 			return goproxy.RejectConnect, host
