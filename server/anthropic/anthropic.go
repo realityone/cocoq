@@ -1,9 +1,11 @@
-package server
+package anthropic
 
 import (
 	"crypto/tls"
 	"net/http"
 	"strings"
+
+	"cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
 	"github.com/sirupsen/logrus"
@@ -19,11 +21,11 @@ var anthropicProxyDomains = sets.New(
 type anthropicProxy struct {
 	ca tls.Certificate
 
-	onRequest  []HandlerFunc[reqCtx]
-	onResponse []HandlerFunc[respCtx]
+	onRequest  []proxy.HandlerFunc[proxy.ReqCtx]
+	onResponse []proxy.HandlerFunc[proxy.RespCtx]
 }
 
-func newAnthropicProxy(ca tls.Certificate) *anthropicProxy {
+func NewAnthropicProxy(ca tls.Certificate) *anthropicProxy {
 	return &anthropicProxy{ca: ca}
 }
 
@@ -31,12 +33,12 @@ func (p *anthropicProxy) Domains() sets.Set[string] {
 	return anthropicProxyDomains
 }
 
-func (p *anthropicProxy) install(proxy *goproxy.ProxyHttpServer) {
+func (p *anthropicProxy) Install(server *goproxy.ProxyHttpServer) {
 	logrus.Infof("Installing Anthropic proxy for domains: %+v", anthropicProxyDomains.UnsortedList())
-	proxy.OnRequest(DstHostInSet(anthropicProxyDomains)).HandleConnect(newMitmConnectAction(p.ca))
+	server.OnRequest(proxy.DstHostInSet(anthropicProxyDomains)).HandleConnect(proxy.NewMitmConnectAction(p.ca))
 
 	// Reject event logging requests
-	proxy.OnRequest(anthropicEventLoggingCondition()).
+	server.OnRequest(anthropicEventLoggingCondition()).
 		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 			logrus.WithFields(logrus.Fields{
 				"session": ctx.Session,
@@ -48,16 +50,16 @@ func (p *anthropicProxy) install(proxy *goproxy.ProxyHttpServer) {
 			return req, goproxy.NewResponse(req, "application/json", http.StatusNotFound, http.StatusText(http.StatusNotFound))
 		})
 	// Handle /v1/messages API requests
-	proxy.OnRequest(anthropicV1MessagesCondition()).DoFunc(p.handleRequest)
-	proxy.OnResponse(anthropicV1MessagesCondition()).DoFunc(p.handleResponse)
+	server.OnRequest(anthropicV1MessagesCondition()).DoFunc(p.handleRequest)
+	server.OnResponse(anthropicV1MessagesCondition()).DoFunc(p.handleResponse)
 }
 
 func (p *anthropicProxy) handleRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-	return handleOnRequest(req, ctx, p.onRequest...)
+	return proxy.HandleOnRequest(req, ctx, p.onRequest...)
 }
 
 func (p *anthropicProxy) handleResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
-	return handleOnResponse(resp, ctx, p.onResponse...)
+	return proxy.HandleOnResponse(resp, ctx, p.onResponse...)
 }
 
 func anthropicEventLoggingCondition() goproxy.ReqConditionFunc {

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"strings"
 	"time"
+
+	"cocoq/server/anthropic"
+	"cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
 	"github.com/elazarl/goproxy/ext/har"
@@ -36,7 +38,7 @@ type Server struct {
 
 type ProxyService interface {
 	Domains() sets.Set[string]
-	install(proxy *goproxy.ProxyHttpServer)
+	Install(*goproxy.ProxyHttpServer)
 }
 
 func New(cfg Config) (*Server, error) {
@@ -45,22 +47,22 @@ func New(cfg Config) (*Server, error) {
 		logger = logrus.New()
 	}
 
-	ca, err := loadOrCreateCA()
+	ca, err := proxy.LoadOrCreateCA(cocoqDirName, caCertFile, caKeyFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "load or create root CA")
 	}
 
-	proxy := goproxy.NewProxyHttpServer()
-	proxy.Verbose = cfg.Verbose
-	proxy.Logger = &proxyLogger{logger: logger}
+	server := goproxy.NewProxyHttpServer()
+	server.Verbose = cfg.Verbose
+	server.Logger = &proxyLogger{logger: logger}
 	proxyServices := []ProxyService{
-		newAnthropicProxy(ca),
+		anthropic.NewAnthropicProxy(ca),
 		newExampleProxy(ca),
 	}
 	proxyDomains := sets.New[string]()
 	for _, ps := range proxyServices {
 		proxyDomains = proxyDomains.Union(ps.Domains())
-		ps.install(proxy)
+		ps.Install(server)
 	}
 
 	if cfg.HARFile != "" {
@@ -86,17 +88,17 @@ func New(cfg Config) (*Server, error) {
 			har.WithExportInterval(5*time.Second),
 			har.WithExportThreshold(32),
 		)
-		proxy.OnRequest(DstHostInSet(proxyDomains)).DoFunc(harLogger.OnRequest)
-		proxy.OnResponse(DstHostInSet(proxyDomains)).DoFunc(harLogger.OnResponse)
+		server.OnRequest(proxy.DstHostInSet(proxyDomains)).DoFunc(harLogger.OnRequest)
+		server.OnResponse(proxy.DstHostInSet(proxyDomains)).DoFunc(harLogger.OnResponse)
 	}
 
 	// Any request that reaches this point is not handled by any proxy service, so we reject it to prevent unintended proxying.
-	proxy.OnRequest(goproxy.Not(DstHostInSet(proxyDomains))).
+	server.OnRequest(goproxy.Not(proxy.DstHostInSet(proxyDomains))).
 		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 			logrus.WithFields(requestLogFields(req, ctx)).Infof("Rejecting plaintext request to %s", req.URL.String())
 			return req, goproxy.NewResponse(req, "application/json", http.StatusNotAcceptable, http.StatusText(http.StatusNotAcceptable))
 		})
-	proxy.OnRequest(goproxy.Not(DstHostInSet(proxyDomains))).
+	server.OnRequest(goproxy.Not(proxy.DstHostInSet(proxyDomains))).
 		HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
 			logrus.WithFields(requestLogFields(ctx.Req, ctx)).Infof("Rejecting connect to %s", host)
 			return goproxy.RejectConnect, host
@@ -104,7 +106,7 @@ func New(cfg Config) (*Server, error) {
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           proxy,
+		Handler:           server,
 		ReadHeaderTimeout: 2 * time.Hour,
 	}
 
@@ -143,10 +145,4 @@ type proxyLogger struct {
 
 func (l *proxyLogger) Printf(format string, args ...any) {
 	l.logger.Printf(format, args...)
-}
-
-func DstHostInSet(hostSet sets.Set[string]) goproxy.ReqConditionFunc {
-	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
-		return hostSet.Has(strings.ToLower(req.URL.Hostname()))
-	}
 }

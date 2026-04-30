@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cocoq/server/proxy"
 	"crypto/tls"
 	"net/http"
 
@@ -23,11 +24,11 @@ func (p *exampleProxy) Domains() sets.Set[string] {
 	return exampleProxyDomains
 }
 
-func (p *exampleProxy) install(proxy *goproxy.ProxyHttpServer) {
+func (p *exampleProxy) Install(server *goproxy.ProxyHttpServer) {
 	logrus.Infof("Installing example proxy for domains: %+v", exampleProxyDomains.UnsortedList())
-	proxy.OnRequest(DstHostInSet(exampleProxyDomains)).HandleConnect(newMitmConnectAction(p.ca))
-	proxy.OnRequest(DstHostInSet(exampleProxyDomains)).DoFunc(p.handleRequest)
-	proxy.OnResponse(DstHostInSet(exampleProxyDomains)).DoFunc(p.handleResponse)
+	server.OnRequest(proxy.DstHostInSet(exampleProxyDomains)).HandleConnect(proxy.NewMitmConnectAction(p.ca))
+	server.OnRequest(proxy.DstHostInSet(exampleProxyDomains)).DoFunc(p.handleRequest)
+	server.OnResponse(proxy.DstHostInSet(exampleProxyDomains)).DoFunc(p.handleResponse)
 }
 
 func (p *exampleProxy) handleRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {

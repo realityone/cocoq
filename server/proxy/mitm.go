@@ -1,4 +1,4 @@
-package server
+package proxy
 
 import (
 	"crypto/rand"
@@ -17,7 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func newMitmConnectAction(ca tls.Certificate) goproxy.FuncHttpsHandler {
+func NewMitmConnectAction(ca tls.Certificate) goproxy.FuncHttpsHandler {
 	connectAction := &goproxy.ConnectAction{
 		Action:    goproxy.ConnectMitm,
 		TLSConfig: goproxy.TLSConfigFromCA(&ca),
@@ -29,7 +29,7 @@ func newMitmConnectAction(ca tls.Certificate) goproxy.FuncHttpsHandler {
 	}
 }
 
-func loadOrCreateCA() (tls.Certificate, error) {
+func LoadOrCreateCA(cocoqDirName, caCertFile, caKeyFile string) (tls.Certificate, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return tls.Certificate{}, errors.Wrap(err, "resolve home directory")

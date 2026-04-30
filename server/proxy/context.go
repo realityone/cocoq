@@ -1,16 +1,18 @@
-package server
+package proxy
 
 import (
 	"math"
 	"net/http"
+	"strings"
 
 	"github.com/elazarl/goproxy"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // abortIndex represents a typical value used in abort functions.
 const abortIndex int8 = math.MaxInt8 >> 1
 
-type reqCtx struct {
+type ReqCtx struct {
 	ProxyCtx *goproxy.ProxyCtx
 	Request  *http.Request
 
@@ -18,7 +20,7 @@ type reqCtx struct {
 	PostResponse *http.Response
 }
 
-type respCtx struct {
+type RespCtx struct {
 	ProxyCtx *goproxy.ProxyCtx
 	Response *http.Response
 
@@ -63,8 +65,8 @@ func safeInt8(n int) int8 {
 	return int8(n)
 }
 
-func handleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[reqCtx]) (*http.Request, *http.Response) {
-	ctx := newContext(reqCtx{
+func HandleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[ReqCtx]) (*http.Request, *http.Response) {
+	ctx := newContext(ReqCtx{
 		ProxyCtx: proxyCtx,
 		Request:  req,
 	}, handlers...)
@@ -77,8 +79,8 @@ func handleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...
 	return postRequest, ctx.Tuple.PostResponse
 }
 
-func handleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[respCtx]) *http.Response {
-	ctx := newContext(respCtx{
+func HandleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[RespCtx]) *http.Response {
+	ctx := newContext(RespCtx{
 		ProxyCtx: proxyCtx,
 		Response: resp,
 	}, handlers...)
@@ -93,8 +95,14 @@ func handleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers 
 type HandlerFunc[T any] func(*OnContext[T])
 type HandlersChain[T any] []HandlerFunc[T]
 
-type RequestHandlersChain = HandlersChain[reqCtx]
-type ResponseHandlersChain = HandlersChain[respCtx]
+type RequestHandlersChain = HandlersChain[ReqCtx]
+type ResponseHandlersChain = HandlersChain[RespCtx]
 
-type OnRequestContext = OnContext[reqCtx]
-type OnResponseContext = OnContext[respCtx]
+type OnRequestContext = OnContext[ReqCtx]
+type OnResponseContext = OnContext[RespCtx]
+
+func DstHostInSet(hostSet sets.Set[string]) goproxy.ReqConditionFunc {
+	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
+		return hostSet.Has(strings.ToLower(req.URL.Hostname()))
+	}
+}

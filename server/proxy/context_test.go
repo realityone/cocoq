@@ -1,4 +1,4 @@
-package server
+package proxy
 
 import (
 	"net/http"
@@ -9,7 +9,7 @@ import (
 func TestOnRequestContextNext(t *testing.T) {
 	req := &http.Request{Method: http.MethodPost}
 	ctx := &OnRequestContext{
-		Tuple: reqCtx{
+		Tuple: ReqCtx{
 			Request: req,
 		},
 		index: -1,
@@ -42,7 +42,7 @@ func TestOnRequestContextNext(t *testing.T) {
 func TestOnResponseContextNext(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusAccepted}
 	ctx := &OnResponseContext{
-		Tuple: respCtx{
+		Tuple: RespCtx{
 			Response: resp,
 		},
 		index: -1,
@@ -87,7 +87,7 @@ func TestContextIsAborted(t *testing.T) {
 func TestHandleOnRequestDefaultsToOriginalRequest(t *testing.T) {
 	req := &http.Request{Method: http.MethodPost}
 
-	gotReq, gotResp := handleOnRequest(req, nil)
+	gotReq, gotResp := HandleOnRequest(req, nil)
 
 	if gotReq != req {
 		t.Fatal("handleOnRequest should return original request when no handler overrides it")
@@ -102,7 +102,7 @@ func TestHandleOnRequestUsesHandlerResult(t *testing.T) {
 	replacementReq := &http.Request{Method: http.MethodGet}
 	response := &http.Response{StatusCode: http.StatusTeapot}
 
-	gotReq, gotResp := handleOnRequest(req, nil, func(c *OnRequestContext) {
+	gotReq, gotResp := HandleOnRequest(req, nil, func(c *OnRequestContext) {
 		if c.Tuple.Request != req {
 			t.Fatal("handler received unexpected request")
 		}
@@ -121,7 +121,7 @@ func TestHandleOnRequestUsesHandlerResult(t *testing.T) {
 func TestHandleOnResponseDefaultsToOriginalResponse(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusAccepted}
 
-	gotResp := handleOnResponse(resp, nil)
+	gotResp := HandleOnResponse(resp, nil)
 
 	if gotResp != resp {
 		t.Fatal("handleOnResponse should return original response when no handler overrides it")
@@ -132,7 +132,7 @@ func TestHandleOnResponseUsesHandlerResult(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusAccepted}
 	replacementResp := &http.Response{StatusCode: http.StatusNoContent}
 
-	gotResp := handleOnResponse(resp, nil, func(c *OnResponseContext) {
+	gotResp := HandleOnResponse(resp, nil, func(c *OnResponseContext) {
 		if c.Tuple.Response != resp {
 			t.Fatal("handler received unexpected response")
 		}
