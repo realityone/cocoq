@@ -27,6 +27,10 @@ func newAnthropicProxy(ca tls.Certificate) *anthropicProxy {
 	return &anthropicProxy{ca: ca}
 }
 
+func (p *anthropicProxy) Domains() sets.Set[string] {
+	return anthropicProxyDomains
+}
+
 func (p *anthropicProxy) install(proxy *goproxy.ProxyHttpServer) {
 	logrus.Infof("Installing Anthropic proxy for domains: %+v", anthropicProxyDomains.UnsortedList())
 	proxy.OnRequest(DstHostInSet(anthropicProxyDomains)).HandleConnect(newMitmConnectAction(p.ca))
@@ -71,11 +75,5 @@ func anthropicV1MessagesCondition() goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		return strings.ToLower(req.URL.Hostname()) == "api.anthropic.com" &&
 			strings.ToLower(req.URL.Path) == "/v1/messages"
-	}
-}
-
-func DstHostInSet(hostSet sets.Set[string]) goproxy.ReqConditionFunc {
-	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
-		return hostSet.Has(strings.ToLower(req.URL.Hostname()))
 	}
 }

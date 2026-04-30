@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/elazarl/goproxy"
 	"github.com/elazarl/goproxy/ext/har"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const (
@@ -30,6 +32,11 @@ type Server struct {
 	addr   string
 	logger *logrus.Logger
 	http   *http.Server
+}
+
+type ProxyService interface {
+	Domains() sets.Set[string]
+	install(proxy *goproxy.ProxyHttpServer)
 }
 
 func New(cfg Config) (*Server, error) {
@@ -73,16 +80,23 @@ func New(cfg Config) (*Server, error) {
 
 	proxy.Verbose = cfg.Verbose
 	proxy.Logger = &proxyLogger{logger: logger}
-	anthropicProxy := newAnthropicProxy(ca)
-	anthropicProxy.install(proxy)
+	proxyServices := []ProxyService{
+		newAnthropicProxy(ca),
+		newExampleProxy(ca),
+	}
+	excludeDomains := sets.New[string]()
+	for _, ps := range proxyServices {
+		excludeDomains = excludeDomains.Union(ps.Domains())
+		ps.install(proxy)
+	}
 
 	// Any request that reaches this point is not handled by any proxy service, so we reject it to prevent unintended proxying.
-	proxy.OnRequest().
+	proxy.OnRequest(goproxy.Not(DstHostInSet(excludeDomains))).
 		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 			logrus.WithFields(requestLogFields(req, ctx)).Infof("Rejecting plaintext request to %s", req.URL.String())
 			return req, goproxy.NewResponse(req, "application/json", http.StatusNotAcceptable, http.StatusText(http.StatusNotAcceptable))
 		})
-	proxy.OnRequest().
+	proxy.OnRequest(goproxy.Not(DstHostInSet(excludeDomains))).
 		HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
 			logrus.WithFields(requestLogFields(ctx.Req, ctx)).Infof("Rejecting connect to %s", host)
 			return goproxy.RejectConnect, host
@@ -129,4 +143,10 @@ type proxyLogger struct {
 
 func (l *proxyLogger) Printf(format string, args ...any) {
 	l.logger.Printf(format, args...)
+}
+
+func DstHostInSet(hostSet sets.Set[string]) goproxy.ReqConditionFunc {
+	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
+		return hostSet.Has(strings.ToLower(req.URL.Hostname()))
+	}
 }
