@@ -21,8 +21,8 @@ var anthropicProxyDomains = sets.New(
 type anthropicProxy struct {
 	ca tls.Certificate
 
-	onRequest  []proxy.HandlerFunc[proxy.ReqCtx]
-	onResponse []proxy.HandlerFunc[proxy.RespCtx]
+	onRequest  []proxy.Handler[proxy.ReqCtx]
+	onResponse []proxy.Handler[proxy.RespCtx]
 }
 
 func NewAnthropicProxy(ca tls.Certificate) *anthropicProxy {
@@ -31,7 +31,7 @@ func NewAnthropicProxy(ca tls.Certificate) *anthropicProxy {
 	}
 	p.onRequest = append(
 		p.onRequest,
-		(&example{}).HandleRequest,
+		&caching1h{},
 	)
 	return p
 }

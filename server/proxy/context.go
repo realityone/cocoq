@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"bytes"
+	"io"
 	"math"
 	"net/http"
 	"strings"
@@ -31,10 +33,10 @@ type OnContext[T any] struct {
 	Tuple T
 
 	index    int8
-	handlers HandlersChain[T]
+	handlers []Handler[T]
 }
 
-func newContext[T any](val T, handlers ...HandlerFunc[T]) *OnContext[T] {
+func newContext[T any](val T, handlers ...Handler[T]) *OnContext[T] {
 	return &OnContext[T]{
 		Tuple:    val,
 		index:    -1,
@@ -46,7 +48,7 @@ func (c *OnContext[T]) Next() {
 	c.index++
 	for c.index < safeInt8(len(c.handlers)) {
 		if c.handlers[c.index] != nil {
-			c.handlers[c.index](c)
+			c.handlers[c.index].Handle(c)
 		}
 		c.index++
 	}
@@ -65,7 +67,7 @@ func safeInt8(n int) int8 {
 	return int8(n)
 }
 
-func HandleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[ReqCtx]) (*http.Request, *http.Response) {
+func HandleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...Handler[ReqCtx]) (*http.Request, *http.Response) {
 	ctx := newContext(ReqCtx{
 		ProxyCtx: proxyCtx,
 		Request:  req,
@@ -79,7 +81,7 @@ func HandleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...
 	return postRequest, ctx.Tuple.PostResponse
 }
 
-func HandleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers ...HandlerFunc[RespCtx]) *http.Response {
+func HandleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers ...Handler[RespCtx]) *http.Response {
 	ctx := newContext(RespCtx{
 		ProxyCtx: proxyCtx,
 		Response: resp,
@@ -92,11 +94,16 @@ func HandleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers 
 	return ctx.Tuple.Response
 }
 
+type Handler[T any] interface {
+	Handle(*OnContext[T])
+}
 type HandlerFunc[T any] func(*OnContext[T])
-type HandlersChain[T any] []HandlerFunc[T]
 
-type RequestHandlersChain = HandlersChain[ReqCtx]
-type ResponseHandlersChain = HandlersChain[RespCtx]
+func (f HandlerFunc[T]) Handle(ctx *OnContext[T]) {
+	f(ctx)
+}
+
+type HandlersChain[T any] []HandlerFunc[T]
 
 type OnRequestContext = OnContext[ReqCtx]
 type OnResponseContext = OnContext[RespCtx]
@@ -104,5 +111,13 @@ type OnResponseContext = OnContext[RespCtx]
 func DstHostInSet(hostSet sets.Set[string]) goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		return hostSet.Has(strings.ToLower(req.URL.Hostname()))
+	}
+}
+
+func ReplaceRequestBody(req *http.Request, body []byte) {
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.ContentLength = int64(len(body))
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(body)), nil
 	}
 }

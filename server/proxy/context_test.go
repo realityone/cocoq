@@ -16,17 +16,17 @@ func TestOnRequestContextNext(t *testing.T) {
 	}
 
 	var calls []string
-	ctx.handlers = RequestHandlersChain{
-		func(c *OnRequestContext) {
+	ctx.handlers = []Handler[ReqCtx]{
+		HandlerFunc[ReqCtx](func(c *OnRequestContext) {
 			if c.Tuple.Request != req {
 				t.Fatal("handler received unexpected request context")
 			}
 			calls = append(calls, "first")
-		},
+		}),
 		nil,
-		func(c *OnRequestContext) {
+		HandlerFunc[ReqCtx](func(c *OnRequestContext) {
 			calls = append(calls, "second")
-		},
+		}),
 	}
 
 	ctx.Next()
@@ -49,17 +49,17 @@ func TestOnResponseContextNext(t *testing.T) {
 	}
 
 	var calls []string
-	ctx.handlers = ResponseHandlersChain{
-		func(c *OnResponseContext) {
+	ctx.handlers = []Handler[RespCtx]{
+		HandlerFunc[RespCtx](func(c *OnResponseContext) {
 			if c.Tuple.Response != resp {
 				t.Fatal("handler received unexpected response context")
 			}
 			calls = append(calls, "first")
-		},
+		}),
 		nil,
-		func(c *OnResponseContext) {
+		HandlerFunc[RespCtx](func(c *OnResponseContext) {
 			calls = append(calls, "second")
-		},
+		}),
 	}
 
 	ctx.Next()
@@ -102,13 +102,13 @@ func TestHandleOnRequestUsesHandlerResult(t *testing.T) {
 	replacementReq := &http.Request{Method: http.MethodGet}
 	response := &http.Response{StatusCode: http.StatusTeapot}
 
-	gotReq, gotResp := HandleOnRequest(req, nil, func(c *OnRequestContext) {
+	gotReq, gotResp := HandleOnRequest(req, nil, HandlerFunc[ReqCtx](func(c *OnRequestContext) {
 		if c.Tuple.Request != req {
 			t.Fatal("handler received unexpected request")
 		}
 		c.Tuple.PostRequest = replacementReq
 		c.Tuple.PostResponse = response
-	})
+	}))
 
 	if gotReq != replacementReq {
 		t.Fatal("handleOnRequest should return handler request override")
@@ -132,12 +132,12 @@ func TestHandleOnResponseUsesHandlerResult(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusAccepted}
 	replacementResp := &http.Response{StatusCode: http.StatusNoContent}
 
-	gotResp := HandleOnResponse(resp, nil, func(c *OnResponseContext) {
+	gotResp := HandleOnResponse(resp, nil, HandlerFunc[RespCtx](func(c *OnResponseContext) {
 		if c.Tuple.Response != resp {
 			t.Fatal("handler received unexpected response")
 		}
 		c.Tuple.PostResponse = replacementResp
-	})
+	}))
 
 	if gotResp != replacementResp {
 		t.Fatal("handleOnResponse should return handler response override")
