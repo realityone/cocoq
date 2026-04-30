@@ -16,6 +16,7 @@ var anthropicProxyDomains = sets.New(
 	"api.anthropic.com",
 	"downloads.claude.ai",
 	"platform.claude.com",
+	"openrouter.ai",
 )
 
 type anthropicProxy struct {
@@ -31,7 +32,8 @@ func NewAnthropicProxy(ca tls.Certificate) *anthropicProxy {
 	}
 	p.onRequest = append(
 		p.onRequest,
-		&caching1h{},
+		caching1h{},
+		currentDateUTC{},
 	)
 	return p
 }
@@ -58,6 +60,7 @@ func (p *anthropicProxy) Install(server *goproxy.ProxyHttpServer) {
 		})
 	// Handle /v1/messages API requests
 	server.OnRequest(anthropicV1MessagesCondition()).DoFunc(p.handleRequest)
+	server.OnRequest(openRouterV1MessagesCondition()).DoFunc(p.handleRequest)
 	server.OnResponse(anthropicV1MessagesCondition()).DoFunc(p.handleResponse)
 }
 
@@ -84,5 +87,12 @@ func anthropicV1MessagesCondition() goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		return strings.ToLower(req.URL.Hostname()) == "api.anthropic.com" &&
 			strings.ToLower(req.URL.Path) == "/v1/messages"
+	}
+}
+
+func openRouterV1MessagesCondition() goproxy.ReqConditionFunc {
+	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
+		return strings.ToLower(req.URL.Hostname()) == "openrouter.ai" &&
+			strings.ToLower(req.URL.Path) == "/api/v1/messages"
 	}
 }
