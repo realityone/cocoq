@@ -22,11 +22,23 @@ type ReqCtx struct {
 	PostResponse *http.Response
 }
 
+type AnthropicUsage interface {
+	InputTokens() int64
+	OutputTokens() int64
+	CacheReadInputTokens() int64
+	CacheCreationInputTokens() int64
+	CacheCreationEphemeral5mInputTokens() int64
+	CacheCreationEphemeral1hInputTokens() int64
+}
+
 type RespCtx struct {
 	ProxyCtx *goproxy.ProxyCtx
 	Response *http.Response
 
 	PostResponse *http.Response
+	Metrics      struct {
+		Usage AnthropicUsage
+	}
 }
 
 type OnContext[T any] struct {

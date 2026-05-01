@@ -65,7 +65,7 @@ func New(cfg Config) (*Server, error) {
 	server.Verbose = cfg.Verbose
 	server.Logger = &proxyLogger{logger: logger}
 	proxyServices := []ProxyService{
-		anthropic.NewAnthropicProxy(ca),
+		anthropic.NewOpenrouterProxy(ca),
 		newExampleProxy(ca),
 	}
 	proxyDomains := sets.New[string]()
