@@ -116,7 +116,47 @@ func (p *openrouterProxy) stickProviderInBody(body []byte) ([]byte, bool, error)
 }
 
 func (p *openrouterProxy) extactUsage(ctx *proxy.OnContext[proxy.RespCtx]) {
-	// TBD
+	data := getUserData(ctx.Opaque.ProxyCtx)
+
+	if data.Stream {
+		// by sse
+		return
+	}
+
+	// by response body
+	resp := ctx.Opaque.Response
+	if resp.Body == nil {
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Warn("failed to read openrouter response body for usage")
+		return
+	}
+	defer resp.Body.Close()
+
+	ctx.Opaque.Metrics.Usage = p.parseUsage(body)
+	proxy.ReplaceResponseBody(resp, body)
+	ctx.Opaque.PostResponse = resp
+}
+
+func (p *openrouterProxy) parseUsage(body []byte) proxy.AnthropicUsage {
+	usageData := gjson.GetBytes(body, "usage")
+	if !usageData.Exists() {
+		logrus.Warn("usage data not found in openrouter response body")
+		return proxy.AnthropicUsage{}
+	}
+	usage := proxy.AnthropicUsage{
+		InputTokens:              usageData.Get("input_tokens").Int(),
+		OutputTokens:             usageData.Get("output_tokens").Int(),
+		CacheReadInputTokens:     usageData.Get("cache_read_input_tokens").Int(),
+		CacheCreationInputTokens: usageData.Get("cache_creation_input_tokens").Int(),
+	}
+	// We assueme that all cache creation input tokens are 1h ttl tokens since openrouter doesn't provide cache creation details.
+	usage.CacheCreation.Ephemeral1hInputTokens = usage.CacheCreationInputTokens
+	usage.SetRaw(json.RawMessage(usageData.Raw))
+	return usage
 }
 
 func openRouterV1MessagesCondition() goproxy.ReqConditionFunc {

@@ -2,6 +2,7 @@ package anthropic
 
 import (
 	"crypto/tls"
+	"io"
 	"net/http"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/elazarl/goproxy"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -31,6 +33,7 @@ func NewAnthropicProxy(ca tls.Certificate) *anthropicProxy {
 	}
 	p.onRequest = append(
 		p.onRequest,
+		proxy.HandlerFunc[proxy.ReqCtx](p.prelude),
 		caching1h{},
 		currentDateUTC{},
 	)
@@ -60,6 +63,33 @@ func (p *anthropicProxy) Install(server *goproxy.ProxyHttpServer) {
 	// Handle /v1/messages API requests
 	server.OnRequest(anthropicV1MessagesCondition()).DoFunc(p.handleRequest)
 	server.OnResponse(anthropicV1MessagesCondition()).DoFunc(p.handleResponse)
+}
+
+type UserData struct {
+	Stream bool
+}
+
+func getUserData(ctx *goproxy.ProxyCtx) *UserData {
+	return ctx.UserData.(*UserData)
+}
+
+func (p *anthropicProxy) prelude(ctx *proxy.OnContext[proxy.ReqCtx]) {
+	data := &UserData{}
+	ctx.Opaque.ProxyCtx.UserData = data
+	req := ctx.Opaque.Request
+	if req.Body == nil {
+		return
+	}
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		logrus.WithError(err).Warn("failed to read anthropic request body for metadata")
+		return
+	}
+	defer req.Body.Close()
+
+	data.Stream = gjson.GetBytes(body, "stream").Bool()
+	proxy.ReplaceRequestBody(req, body)
 }
 
 func (p *anthropicProxy) handleRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {

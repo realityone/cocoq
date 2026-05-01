@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"math"
 	"net/http"
@@ -22,13 +23,50 @@ type ReqCtx struct {
 	PostResponse *http.Response
 }
 
-type AnthropicUsage interface {
-	InputTokens() int64
-	OutputTokens() int64
-	CacheReadInputTokens() int64
-	CacheCreationInputTokens() int64
-	CacheCreationEphemeral5mInputTokens() int64
-	CacheCreationEphemeral1hInputTokens() int64
+type AnthropicUsage struct {
+	InputTokens              int64 `json:"input_tokens"`
+	OutputTokens             int64 `json:"output_tokens"`
+	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+	CacheCreation            struct {
+		Ephemeral5mInputTokens int64 `json:"ephemeral_5m_input_tokens"`
+		Ephemeral1hInputTokens int64 `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
+	raw json.RawMessage `json:"-"`
+}
+
+func (u *AnthropicUsage) UnmarshalJSON(data []byte) error {
+	type Alias AnthropicUsage
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(u),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	u.raw = data
+	return nil
+}
+
+func (u *AnthropicUsage) MarshalJSON() ([]byte, error) {
+	if u.raw != nil {
+		return u.raw, nil
+	}
+	type Alias AnthropicUsage
+	return json.Marshal(&struct {
+		*Alias
+	}{
+		Alias: (*Alias)(u),
+	})
+}
+
+func (u *AnthropicUsage) GetRaw() json.RawMessage {
+	return u.raw
+}
+
+func (u *AnthropicUsage) SetRaw(raw json.RawMessage) {
+	u.raw = raw
 }
 
 type RespCtx struct {
@@ -132,4 +170,9 @@ func ReplaceRequestBody(req *http.Request, body []byte) {
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(body)), nil
 	}
+}
+
+func ReplaceResponseBody(resp *http.Response, body []byte) {
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
 }
