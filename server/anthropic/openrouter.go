@@ -67,6 +67,7 @@ func (p *openrouterProxy) Install(server *goproxy.ProxyHttpServer) {
 
 func (p *openrouterProxy) stickProvider(ctx *proxy.OnContext[proxy.ReqCtx]) {
 	if p.provider == "" {
+		logrus.Info("no provider configured for openrouter proxy, skipping provider stickiness")
 		return
 	}
 	req := ctx.Opaque.Request
