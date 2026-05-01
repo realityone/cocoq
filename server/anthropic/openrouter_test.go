@@ -128,7 +128,7 @@ func TestOpenrouterExtractUsageTreatsCacheCreationAs1h(t *testing.T) {
 
 	(&openrouterProxy{}).extactUsage(ctx)
 
-	usage := ctx.Opaque.Metrics.Usage
+	usage := waitForUsage(t, ctx)
 	if usage.InputTokens != 4 {
 		t.Fatalf("InputTokens = %d, want 4", usage.InputTokens)
 	}
@@ -184,7 +184,7 @@ func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
 		t.Fatalf("body = %s, want %s", restored, body)
 	}
 
-	usage := ctx.Opaque.Metrics.Usage
+	usage := waitForUsage(t, ctx)
 	if usage.InputTokens != 3 {
 		t.Fatalf("InputTokens = %d, want 3", usage.InputTokens)
 	}

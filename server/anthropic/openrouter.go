@@ -97,10 +97,6 @@ func (p *openrouterProxy) stickProvider(ctx *proxy.OnContext[proxy.ReqCtx]) {
 }
 
 func (p *openrouterProxy) stickProviderInBody(body []byte) ([]byte, bool, error) {
-	if !gjson.ValidBytes(body) {
-		return body, false, nil
-	}
-
 	provider, _ := json.Marshal(struct {
 		Only           []string `json:"only"`
 		AllowFallbacks bool     `json:"allow_fallbacks"`
@@ -165,19 +161,7 @@ func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]
 				continue
 			}
 			ctx.Opaque.Metrics.Usage = usage
-			fields := logrus.Fields{
-				"session": ctx.Opaque.ProxyCtx.Session,
-				"service": "anthropic",
-				"usage":   usage,
-			}
-			if resp.Request != nil {
-				fields["method"] = resp.Request.Method
-				if resp.Request.URL != nil {
-					fields["host"] = resp.Request.URL.Host
-					fields["url"] = resp.Request.URL.String()
-				}
-			}
-			logrus.WithFields(fields).Info("extracted usage from openrouter SSE response")
+			logrus.WithField("usage", usage).Info("extracted usage from openrouter SSE response")
 		}
 	}()
 	ctx.Opaque.PostResponse = resp
