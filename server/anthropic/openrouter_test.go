@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/realityone/cocoq/server/proxy"
 
@@ -74,7 +75,7 @@ func TestOpenrouterExtractUsageFromNonStreamResponse(t *testing.T) {
 
 	(&openrouterProxy{}).extactUsage(ctx)
 
-	usage := ctx.Opaque.Metrics.Usage
+	usage := waitForUsage(t, ctx)
 	if usage.InputTokens != 3 {
 		t.Fatalf("InputTokens = %d, want 3", usage.InputTokens)
 	}
@@ -148,7 +149,60 @@ func TestOpenrouterExtractUsageTreatsCacheCreationAs1h(t *testing.T) {
 	}
 }
 
-func TestOpenrouterExtractUsageSkipsStreamResponse(t *testing.T) {
+func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
+	body := strings.Join([]string{
+		"event: message_start",
+		`data: {"type":"message_start","message":{"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":null,"cache_read_input_tokens":null,"cache_creation":null}}}`,
+		"",
+		"event: content_block_delta",
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}}`,
+		"",
+		"event: message_delta",
+		`data: {"type":"message_delta","usage":{"input_tokens":3,"output_tokens":195,"cache_creation_input_tokens":0,"cache_read_input_tokens":24804,"cost":0.0103752}}`,
+		"",
+		"event: message_stop",
+		`data: {"type":"message_stop"}`,
+		"",
+		"event: data",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	resp := newOpenrouterResponse(body)
+	ctx := &proxy.OnContext[proxy.RespCtx]{
+		Opaque: proxy.RespCtx{
+			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{Stream: true}},
+			Response: resp,
+		},
+	}
+
+	(&openrouterProxy{}).extactUsage(ctx)
+
+	if ctx.Opaque.PostResponse != resp {
+		t.Fatal("PostResponse was not set to the forwarded response")
+	}
+	if restored := readResponseBody(t, resp); restored != body {
+		t.Fatalf("body = %s, want %s", restored, body)
+	}
+
+	usage := ctx.Opaque.Metrics.Usage
+	if usage.InputTokens != 3 {
+		t.Fatalf("InputTokens = %d, want 3", usage.InputTokens)
+	}
+	if usage.OutputTokens != 195 {
+		t.Fatalf("OutputTokens = %d, want 195", usage.OutputTokens)
+	}
+	if usage.CacheCreationInputTokens != 0 {
+		t.Fatalf("CacheCreationInputTokens = %d, want 0", usage.CacheCreationInputTokens)
+	}
+	if usage.CacheReadInputTokens != 24804 {
+		t.Fatalf("CacheReadInputTokens = %d, want 24804", usage.CacheReadInputTokens)
+	}
+	if len(usage.GetRaw()) == 0 {
+		t.Fatal("raw usage JSON was not recorded")
+	}
+}
+
+func TestOpenrouterExtractUsageSkipsStreamResponseWithoutUsage(t *testing.T) {
 	body := `{"usage":{"input_tokens":3}}`
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
@@ -185,4 +239,19 @@ func readResponseBody(t *testing.T, resp *http.Response) string {
 		t.Fatalf("ReadAll returned error: %v", err)
 	}
 	return string(body)
+}
+
+func waitForUsage(t *testing.T, ctx *proxy.OnContext[proxy.RespCtx]) proxy.AnthropicUsage {
+	t.Helper()
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		usage := ctx.Opaque.Metrics.Usage
+		if len(usage.GetRaw()) > 0 {
+			return usage
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("timed out waiting for usage")
+	return proxy.AnthropicUsage{}
 }

@@ -20,11 +20,8 @@ func TestForwardPassesThroughBodyAndSendsEvents(t *testing.T) {
 	upstream := &http.Response{
 		Body: io.NopCloser(strings.NewReader(body)),
 	}
-	events := make(chan Event, 2)
 
-	if err := Forward(upstream, events); err != nil {
-		t.Fatalf("Forward() error = %v", err)
-	}
+	events := Forward(upstream)
 
 	got, err := io.ReadAll(upstream.Body)
 	if err != nil {
@@ -42,17 +39,17 @@ func TestForwardPassesThroughBodyAndSendsEvents(t *testing.T) {
 	if second.Event != "message_stop" || second.Data != "[DONE]" {
 		t.Fatalf("second event = %#v", second)
 	}
+	if event, ok := <-events; ok {
+		t.Fatalf("unexpected extra event = %#v", event)
+	}
 }
 
 func TestForwardSendsUnterminatedEventAtEOF(t *testing.T) {
 	upstream := &http.Response{
 		Body: io.NopCloser(strings.NewReader("event: message\ndata: done")),
 	}
-	events := make(chan Event, 1)
 
-	if err := Forward(upstream, events); err != nil {
-		t.Fatalf("Forward() error = %v", err)
-	}
+	events := Forward(upstream)
 	if _, err := io.ReadAll(upstream.Body); err != nil {
 		t.Fatalf("ReadAll() error = %v", err)
 	}
@@ -60,5 +57,8 @@ func TestForwardSendsUnterminatedEventAtEOF(t *testing.T) {
 	event := <-events
 	if event.Event != "message" || event.Data != "done" {
 		t.Fatalf("event = %#v", event)
+	}
+	if event, ok := <-events; ok {
+		t.Fatalf("unexpected extra event = %#v", event)
 	}
 }

@@ -14,8 +14,10 @@ import (
 type Event = ginsse.Event
 
 // Forward wraps upstream.Body so callers can read the original SSE stream while
-// completed events are decoded and sent to events. The caller owns events.
-func Forward(upstream *http.Response, events chan<- Event) error {
+// completed events are decoded and sent to the returned channel. The event
+// channel is closed when forwarding finishes.
+func Forward(upstream *http.Response) <-chan Event {
+	events := make(chan Event, 16)
 	reader, writer := io.Pipe()
 	body := upstream.Body
 	upstream.Body = &forwardedBody{
@@ -24,6 +26,7 @@ func Forward(upstream *http.Response, events chan<- Event) error {
 	}
 
 	go func() {
+		defer close(events)
 		err := forward(body, writer, events)
 		if err != nil {
 			_ = writer.CloseWithError(err)
@@ -32,7 +35,7 @@ func Forward(upstream *http.Response, events chan<- Event) error {
 		_ = writer.Close()
 	}()
 
-	return nil
+	return events
 }
 
 type forwardedBody struct {
