@@ -16,7 +16,7 @@ const cacheControlTTL1h = "1h"
 type caching1h struct{}
 
 func (c caching1h) Handle(ctx *proxy.OnContext[proxy.ReqCtx]) {
-	req := ctx.Tuple.Request
+	req := ctx.Opaque.Request
 	if req.Body == nil {
 		return
 	}
@@ -38,7 +38,7 @@ func (c caching1h) Handle(ctx *proxy.OnContext[proxy.ReqCtx]) {
 	}
 
 	proxy.ReplaceRequestBody(req, nextBody)
-	ctx.Tuple.PostRequest = req
+	ctx.Opaque.PostRequest = req
 }
 
 func (c caching1h) forcePromptCacheControlTTL1h(body []byte) ([]byte, bool, error) {

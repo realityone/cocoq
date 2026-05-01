@@ -21,7 +21,7 @@ type currentDateUTC struct {
 }
 
 func (c currentDateUTC) Handle(ctx *proxy.OnContext[proxy.ReqCtx]) {
-	req := ctx.Tuple.Request
+	req := ctx.Opaque.Request
 	if req.Body == nil {
 		return
 	}
@@ -44,7 +44,7 @@ func (c currentDateUTC) Handle(ctx *proxy.OnContext[proxy.ReqCtx]) {
 	}
 
 	proxy.ReplaceRequestBody(req, nextBody)
-	ctx.Tuple.PostRequest = req
+	ctx.Opaque.PostRequest = req
 }
 
 func (c currentDateUTC) forcePromptCurrentDateUTC(body []byte, utcDate string) ([]byte, bool, error) {

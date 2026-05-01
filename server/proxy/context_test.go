@@ -9,7 +9,7 @@ import (
 func TestOnRequestContextNext(t *testing.T) {
 	req := &http.Request{Method: http.MethodPost}
 	ctx := &OnRequestContext{
-		Tuple: ReqCtx{
+		Opaque: ReqCtx{
 			Request: req,
 		},
 		index: -1,
@@ -18,7 +18,7 @@ func TestOnRequestContextNext(t *testing.T) {
 	var calls []string
 	ctx.handlers = []Handler[ReqCtx]{
 		HandlerFunc[ReqCtx](func(c *OnRequestContext) {
-			if c.Tuple.Request != req {
+			if c.Opaque.Request != req {
 				t.Fatal("handler received unexpected request context")
 			}
 			calls = append(calls, "first")
@@ -42,7 +42,7 @@ func TestOnRequestContextNext(t *testing.T) {
 func TestOnResponseContextNext(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusAccepted}
 	ctx := &OnResponseContext{
-		Tuple: RespCtx{
+		Opaque: RespCtx{
 			Response: resp,
 		},
 		index: -1,
@@ -51,7 +51,7 @@ func TestOnResponseContextNext(t *testing.T) {
 	var calls []string
 	ctx.handlers = []Handler[RespCtx]{
 		HandlerFunc[RespCtx](func(c *OnResponseContext) {
-			if c.Tuple.Response != resp {
+			if c.Opaque.Response != resp {
 				t.Fatal("handler received unexpected response context")
 			}
 			calls = append(calls, "first")
@@ -103,11 +103,11 @@ func TestHandleOnRequestUsesHandlerResult(t *testing.T) {
 	response := &http.Response{StatusCode: http.StatusTeapot}
 
 	gotReq, gotResp := HandleOnRequest(req, nil, HandlerFunc[ReqCtx](func(c *OnRequestContext) {
-		if c.Tuple.Request != req {
+		if c.Opaque.Request != req {
 			t.Fatal("handler received unexpected request")
 		}
-		c.Tuple.PostRequest = replacementReq
-		c.Tuple.PostResponse = response
+		c.Opaque.PostRequest = replacementReq
+		c.Opaque.PostResponse = response
 	}))
 
 	if gotReq != replacementReq {
@@ -133,10 +133,10 @@ func TestHandleOnResponseUsesHandlerResult(t *testing.T) {
 	replacementResp := &http.Response{StatusCode: http.StatusNoContent}
 
 	gotResp := HandleOnResponse(resp, nil, HandlerFunc[RespCtx](func(c *OnResponseContext) {
-		if c.Tuple.Response != resp {
+		if c.Opaque.Response != resp {
 			t.Fatal("handler received unexpected response")
 		}
-		c.Tuple.PostResponse = replacementResp
+		c.Opaque.PostResponse = replacementResp
 	}))
 
 	if gotResp != replacementResp {

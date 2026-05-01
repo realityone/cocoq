@@ -82,7 +82,7 @@ func TestCurrentDateUTCHandleUsesUTCDate(t *testing.T) {
 	body := `{"messages":[{"role":"user","content":[{"type":"text","text":"<system-reminder>\n# currentDate\nToday's date is 2026-05-01.\n</system-reminder>\n"}]}]}`
 	req := newAnthropicMessagesRequest(t, body)
 	ctx := &proxy.OnContext[proxy.ReqCtx]{
-		Tuple: proxy.ReqCtx{Request: req},
+		Opaque: proxy.ReqCtx{Request: req},
 	}
 	c := currentDateUTC{
 		now: func() time.Time {
@@ -92,7 +92,7 @@ func TestCurrentDateUTCHandleUsesUTCDate(t *testing.T) {
 
 	c.Handle(ctx)
 
-	got := readRequestBody(t, ctx.Tuple.PostRequest)
+	got := readRequestBody(t, ctx.Opaque.PostRequest)
 	text := gjson.GetBytes(got, "messages.0.content.0.text").String()
 	if !strings.Contains(text, "Today's date is 2026-04-30.") {
 		t.Fatalf("currentDate text did not use UTC date: %q", text)

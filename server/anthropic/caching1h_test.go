@@ -108,16 +108,16 @@ func TestCaching1hHandleRequestRewritesRequestBody(t *testing.T) {
 	}`
 	req := newAnthropicMessagesRequest(t, body)
 	ctx := &proxy.OnContext[proxy.ReqCtx]{
-		Tuple: proxy.ReqCtx{Request: req},
+		Opaque: proxy.ReqCtx{Request: req},
 	}
 
 	(&caching1h{}).Handle(ctx)
 
-	if ctx.Tuple.PostRequest != req {
+	if ctx.Opaque.PostRequest != req {
 		t.Fatal("HandleRequest did not set PostRequest to the rewritten request")
 	}
 
-	got := readRequestBody(t, ctx.Tuple.PostRequest)
+	got := readRequestBody(t, ctx.Opaque.PostRequest)
 	assertJSONEqual(t, got, "system.0.cache_control.ttl", "1h")
 	assertJSONEqual(t, got, "messages.0.content.0.cache_control.ttl", "1h")
 	if req.ContentLength != int64(len(got)) {
@@ -129,12 +129,12 @@ func TestCaching1hHandleRequestRestoresBodyOnNoop(t *testing.T) {
 	body := `{"messages":[{"role":"user","content":[{"type":"text","text":"uncached"}]}]}`
 	req := newAnthropicMessagesRequest(t, body)
 	ctx := &proxy.OnContext[proxy.ReqCtx]{
-		Tuple: proxy.ReqCtx{Request: req},
+		Opaque: proxy.ReqCtx{Request: req},
 	}
 
 	(&caching1h{}).Handle(ctx)
 
-	got := readRequestBody(t, ctx.Tuple.PostRequest)
+	got := readRequestBody(t, ctx.Opaque.PostRequest)
 	if string(got) != body {
 		t.Fatalf("body = %s, want %s", got, body)
 	}

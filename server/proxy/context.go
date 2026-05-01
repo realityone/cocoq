@@ -30,7 +30,7 @@ type RespCtx struct {
 }
 
 type OnContext[T any] struct {
-	Tuple T
+	Opaque T
 
 	index    int8
 	handlers []Handler[T]
@@ -38,7 +38,7 @@ type OnContext[T any] struct {
 
 func newContext[T any](val T, handlers ...Handler[T]) *OnContext[T] {
 	return &OnContext[T]{
-		Tuple:    val,
+		Opaque:   val,
 		index:    -1,
 		handlers: handlers,
 	}
@@ -74,11 +74,11 @@ func HandleOnRequest(req *http.Request, proxyCtx *goproxy.ProxyCtx, handlers ...
 	}, handlers...)
 	ctx.Next()
 
-	postRequest := ctx.Tuple.PostRequest
+	postRequest := ctx.Opaque.PostRequest
 	if postRequest == nil {
-		postRequest = ctx.Tuple.Request
+		postRequest = ctx.Opaque.Request
 	}
-	return postRequest, ctx.Tuple.PostResponse
+	return postRequest, ctx.Opaque.PostResponse
 }
 
 func HandleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers ...Handler[RespCtx]) *http.Response {
@@ -88,10 +88,10 @@ func HandleOnResponse(resp *http.Response, proxyCtx *goproxy.ProxyCtx, handlers 
 	}, handlers...)
 	ctx.Next()
 
-	if ctx.Tuple.PostResponse != nil {
-		return ctx.Tuple.PostResponse
+	if ctx.Opaque.PostResponse != nil {
+		return ctx.Opaque.PostResponse
 	}
-	return ctx.Tuple.Response
+	return ctx.Opaque.Response
 }
 
 type Handler[T any] interface {
