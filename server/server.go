@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/realityone/cocoq/server/anthropic"
+	"github.com/realityone/cocoq/server/database"
+	"github.com/realityone/cocoq/server/database/dbrt"
 	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
@@ -24,14 +26,16 @@ const (
 )
 
 type Config struct {
-	Addr    string
-	HARFile string
-	Verbose bool
-	Logger  *logrus.Logger
+	Addr         string
+	HARFile      string
+	Verbose      bool
+	DatabasePath string
+	Logger       *logrus.Logger
 }
 
 type Server struct {
 	addr   string
+	db     *dbrt.Client
 	logger *logrus.Logger
 	http   *http.Server
 }
@@ -50,6 +54,11 @@ func New(cfg Config) (*Server, error) {
 	ca, err := proxy.LoadOrCreateCA(cocoqDirName, caCertFile, caKeyFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "load or create root CA")
+	}
+
+	db, err := database.OpenClient(cfg.DatabasePath)
+	if err != nil {
+		return nil, errors.Wrap(err, "open database")
 	}
 
 	server := goproxy.NewProxyHttpServer()
@@ -112,6 +121,7 @@ func New(cfg Config) (*Server, error) {
 
 	return &Server{
 		addr:   cfg.Addr,
+		db:     db,
 		logger: logger,
 		http:   httpServer,
 	}, nil
@@ -131,12 +141,19 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	var shutdownErr error
 	if s.http != nil {
 		if err := s.http.Shutdown(ctx); err != nil {
-			return errors.Wrap(err, "shutdown HTTP server")
+			shutdownErr = errors.Wrap(err, "shutdown HTTP server")
 		}
 	}
-	return nil
+	if s.db != nil {
+		if err := s.db.Close(); err != nil && shutdownErr == nil {
+			shutdownErr = errors.Wrap(err, "close database")
+		}
+		s.db = nil
+	}
+	return shutdownErr
 }
 
 type proxyLogger struct {
