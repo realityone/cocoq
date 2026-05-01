@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"cocoq/server/proxy"
+	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
 	"github.com/sirupsen/logrus"

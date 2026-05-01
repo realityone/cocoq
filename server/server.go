@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"cocoq/server/anthropic"
-	"cocoq/server/proxy"
+	"github.com/realityone/cocoq/server/anthropic"
+	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
 	"github.com/elazarl/goproxy/ext/har"

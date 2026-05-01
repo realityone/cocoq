@@ -1,4 +1,4 @@
-module cocoq
+module github.com/realityone/cocoq
 
 go 1.26.1
 

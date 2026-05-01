@@ -1,9 +1,10 @@
 package server
 
 import (
-	"cocoq/server/proxy"
 	"crypto/tls"
 	"net/http"
+
+	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
 	"github.com/sirupsen/logrus"

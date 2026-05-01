@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"cocoq/server/proxy"
+	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/tidwall/gjson"
 )

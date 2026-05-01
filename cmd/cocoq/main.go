@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"cocoq/server"
+	"github.com/realityone/cocoq/server"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"

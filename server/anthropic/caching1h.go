@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"cocoq/server/proxy"
+	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
