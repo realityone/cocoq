@@ -2,12 +2,17 @@ package anthropic
 
 import (
 	"bytes"
+	"context"
 	"io"
+	"math"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/realityone/cocoq/server/database"
+	"github.com/realityone/cocoq/server/database/dbrt"
 	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
@@ -56,6 +61,7 @@ func TestOpenrouterStickProviderOverwritesProviderBody(t *testing.T) {
 }
 
 func TestOpenrouterExtractUsageFromNonStreamResponse(t *testing.T) {
+	client := newOpenrouterTestDB(t)
 	body := `{
 		"id": "gen-1777663336-lfpI0TKtuVzXxksXmAIg",
 		"usage": {
@@ -75,7 +81,7 @@ func TestOpenrouterExtractUsageFromNonStreamResponse(t *testing.T) {
 		},
 	}
 
-	(&openrouterProxy{}).extactUsage(ctx)
+	(&openrouterProxy{db: client}).extactUsage(ctx)
 
 	usage := waitForUsage(t, ctx)
 	if usage.InputTokens != 3 {
@@ -107,7 +113,59 @@ func TestOpenrouterExtractUsageFromNonStreamResponse(t *testing.T) {
 	}
 }
 
+func TestOpenrouterExtractUsageSavesNonStreamUsage(t *testing.T) {
+	client := newOpenrouterTestDB(t)
+	body := `{
+		"usage": {
+			"input_tokens": 3,
+			"output_tokens": 117,
+			"cache_creation_input_tokens": 24804,
+			"cache_read_input_tokens": 0
+		}
+	}`
+	resp := newOpenrouterResponse(body)
+	ctx := &proxy.OnContext[proxy.RespCtx]{
+		Opaque: proxy.RespCtx{
+			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{
+				DeviceID:    "device-1",
+				SessionID:   "session-1",
+				AccountUUID: "account-1",
+			}},
+			Response: resp,
+		},
+	}
+
+	(&openrouterProxy{db: client}).extactUsage(ctx)
+
+	record := waitForUsageRecord(t, client)
+	if record.DeviceID != "device-1" {
+		t.Fatalf("DeviceID = %q, want device-1", record.DeviceID)
+	}
+	if record.SessionID != "session-1" {
+		t.Fatalf("SessionID = %q, want session-1", record.SessionID)
+	}
+	if record.AccountUUID != "account-1" {
+		t.Fatalf("AccountUUID = %q, want account-1", record.AccountUUID)
+	}
+	if record.InputTokens != 3 {
+		t.Fatalf("InputTokens = %d, want 3", record.InputTokens)
+	}
+	if record.OutputTokens != 117 {
+		t.Fatalf("OutputTokens = %d, want 117", record.OutputTokens)
+	}
+	if record.CacheCreationEphemeral1hInputTokens != 24804 {
+		t.Fatalf("CacheCreationEphemeral1hInputTokens = %d, want 24804", record.CacheCreationEphemeral1hInputTokens)
+	}
+	if got := gjson.Get(record.Raw, "cache_creation_input_tokens").Int(); got != 24804 {
+		t.Fatalf("Raw.cache_creation_input_tokens = %d, want 24804", got)
+	}
+	if record.CacheHitRate != 0 {
+		t.Fatalf("CacheHitRate = %g, want 0", record.CacheHitRate)
+	}
+}
+
 func TestOpenrouterExtractUsageTreatsCacheCreationAs1h(t *testing.T) {
+	client := newOpenrouterTestDB(t)
 	body := `{
 		"usage": {
 			"input_tokens": 4,
@@ -128,7 +186,7 @@ func TestOpenrouterExtractUsageTreatsCacheCreationAs1h(t *testing.T) {
 		},
 	}
 
-	(&openrouterProxy{}).extactUsage(ctx)
+	(&openrouterProxy{db: client}).extactUsage(ctx)
 
 	usage := waitForUsage(t, ctx)
 	if usage.InputTokens != 4 {
@@ -152,6 +210,7 @@ func TestOpenrouterExtractUsageTreatsCacheCreationAs1h(t *testing.T) {
 }
 
 func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
+	client := newOpenrouterTestDB(t)
 	body := strings.Join([]string{
 		"event: message_start",
 		`data: {"type":"message_start","message":{"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":null,"cache_read_input_tokens":null,"cache_creation":null}}}`,
@@ -172,12 +231,18 @@ func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
 		Opaque: proxy.RespCtx{
-			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{Model: "claude-sonnet-4-6", Stream: true}},
+			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{
+				DeviceID:    "device-2",
+				SessionID:   "session-2",
+				AccountUUID: "account-2",
+				Model:       "claude-sonnet-4-6",
+				Stream:      true,
+			}},
 			Response: resp,
 		},
 	}
 
-	(&openrouterProxy{}).extactUsage(ctx)
+	(&openrouterProxy{db: client}).extactUsage(ctx)
 
 	if ctx.Opaque.Metrics.Model != "claude-sonnet-4-6" {
 		t.Fatalf("Metrics.Model = %q, want claude-sonnet-4-6", ctx.Opaque.Metrics.Model)
@@ -204,6 +269,64 @@ func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
 	}
 	if len(usage.GetRaw()) == 0 {
 		t.Fatal("raw usage JSON was not recorded")
+	}
+
+	record := waitForUsageRecord(t, client)
+	if record.DeviceID != "device-2" {
+		t.Fatalf("DeviceID = %q, want device-2", record.DeviceID)
+	}
+	if record.SessionID != "session-2" {
+		t.Fatalf("SessionID = %q, want session-2", record.SessionID)
+	}
+	if record.AccountUUID != "account-2" {
+		t.Fatalf("AccountUUID = %q, want account-2", record.AccountUUID)
+	}
+	if record.CacheReadInputTokens != 24804 {
+		t.Fatalf("CacheReadInputTokens = %d, want 24804", record.CacheReadInputTokens)
+	}
+	if math.Abs(record.CacheHitRate-24804.0/24807.0) > 0.000001 {
+		t.Fatalf("CacheHitRate = %g, want %g", record.CacheHitRate, 24804.0/24807.0)
+	}
+}
+
+func TestOpenrouterExtractUsageFromStreamResponseSavesEveryUsage(t *testing.T) {
+	client := newOpenrouterTestDB(t)
+	body := strings.Join([]string{
+		"event: message_delta",
+		`data: {"type":"message_delta","usage":{"input_tokens":1,"output_tokens":2,"cache_creation_input_tokens":3,"cache_read_input_tokens":4}}`,
+		"",
+		"event: message_delta",
+		`data: {"type":"message_delta","usage":{"input_tokens":5,"output_tokens":6,"cache_creation_input_tokens":7,"cache_read_input_tokens":8}}`,
+		"",
+		"event: data",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	resp := newOpenrouterResponse(body)
+	ctx := &proxy.OnContext[proxy.RespCtx]{
+		Opaque: proxy.RespCtx{
+			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{
+				DeviceID:    "device-3",
+				SessionID:   "session-3",
+				AccountUUID: "account-3",
+				Stream:      true,
+			}},
+			Response: resp,
+		},
+	}
+
+	(&openrouterProxy{db: client}).extactUsage(ctx)
+	if restored := readResponseBody(t, resp); restored != body {
+		t.Fatalf("body = %s, want %s", restored, body)
+	}
+
+	records := waitForUsageRecordCount(t, client, 2)
+	outputTokens := map[int64]bool{}
+	for _, record := range records {
+		outputTokens[record.OutputTokens] = true
+	}
+	if !outputTokens[2] || !outputTokens[6] {
+		t.Fatalf("saved output tokens = %v, want 2 and 6", outputTokens)
 	}
 }
 
@@ -246,6 +369,7 @@ func TestOpenrouterUsageLogFieldsFormatsRawUsageAsJSON(t *testing.T) {
 }
 
 func TestOpenrouterExtractUsageSkipsStreamResponseWithoutUsage(t *testing.T) {
+	client := newOpenrouterTestDB(t)
 	body := `{"usage":{"input_tokens":3}}`
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
@@ -255,7 +379,7 @@ func TestOpenrouterExtractUsageSkipsStreamResponseWithoutUsage(t *testing.T) {
 		},
 	}
 
-	(&openrouterProxy{}).extactUsage(ctx)
+	(&openrouterProxy{db: client}).extactUsage(ctx)
 
 	if len(ctx.Opaque.Metrics.Usage.GetRaw()) != 0 {
 		t.Fatal("usage was parsed for stream response")
@@ -297,4 +421,48 @@ func waitForUsage(t *testing.T, ctx *proxy.OnContext[proxy.RespCtx]) proxy.Anthr
 	}
 	t.Fatal("timed out waiting for usage")
 	return proxy.AnthropicUsage{}
+}
+
+func newOpenrouterTestDB(t *testing.T) *dbrt.Client {
+	t.Helper()
+
+	client, err := database.OpenClient(filepath.Join(t.TempDir(), "database.db"))
+	if err != nil {
+		t.Fatalf("OpenClient() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	})
+	return client
+}
+
+func waitForUsageRecord(t *testing.T, client *dbrt.Client) *dbrt.AnthropicUsage {
+	t.Helper()
+
+	records := waitForUsageRecordCount(t, client, 1)
+	return records[0]
+}
+
+func waitForUsageRecordCount(t *testing.T, client *dbrt.Client, want int) []*dbrt.AnthropicUsage {
+	t.Helper()
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		records, err := client.AnthropicUsage.Query().All(context.Background())
+		if err != nil {
+			if strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked") {
+				time.Sleep(time.Millisecond)
+				continue
+			}
+			t.Fatalf("query AnthropicUsage: %v", err)
+		}
+		if len(records) == want {
+			return records
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d usage records", want)
+	return nil
 }

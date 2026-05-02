@@ -1,12 +1,14 @@
 package anthropic
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/realityone/cocoq/server/database/dbrt"
 	"github.com/realityone/cocoq/server/proxy"
 	"github.com/realityone/cocoq/server/sse"
 
@@ -21,12 +23,14 @@ const defaultOpenRouterProvider = "anthropic"
 
 type openrouterProxy struct {
 	*anthropicProxy
+	db       *dbrt.Client
 	provider string
 }
 
-func NewOpenrouterProxy(ca tls.Certificate) *openrouterProxy {
+func NewOpenrouterProxy(ca tls.Certificate, db *dbrt.Client) *openrouterProxy {
 	p := &openrouterProxy{
 		anthropicProxy: NewAnthropicProxy(ca),
+		db:             db,
 		provider:       defaultOpenRouterProvider,
 	}
 	p.onRequest = append(
@@ -120,8 +124,10 @@ func (p *openrouterProxy) extactUsage(ctx *proxy.OnContext[proxy.RespCtx]) {
 		p.extactUsageFromSSE(ctx)
 		return
 	}
+	p.extactUsageFromBody(ctx)
+}
 
-	// by response body
+func (p *openrouterProxy) extactUsageFromBody(ctx *proxy.OnContext[proxy.RespCtx]) {
 	resp := ctx.Opaque.Response
 	if resp.Body == nil {
 		return
@@ -141,7 +147,7 @@ func (p *openrouterProxy) extactUsage(ctx *proxy.OnContext[proxy.RespCtx]) {
 		logrus.Warn("failed to parse usage from openrouter response body")
 		return
 	}
-	ctx.Opaque.Metrics.Usage = usage
+	p.recordUsage(ctx, usage)
 }
 
 func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]) {
@@ -150,9 +156,6 @@ func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]
 
 	go func() {
 		for event := range events {
-			if event.Event != "message_delta" {
-				continue
-			}
 			data, ok := event.Data.(string)
 			if !ok || !gjson.Get(data, "usage").Exists() {
 				continue
@@ -161,12 +164,52 @@ func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]
 			if !ok {
 				continue
 			}
-			ctx.Opaque.Metrics.Usage = usage
+			p.recordUsage(ctx, usage)
 			logrus.WithField("model", ctx.Opaque.Metrics.Model).
-				WithFields(p.usageFields(usage)).Info("extracted usage from openrouter SSE response")
+				WithFields(p.usageFields(usage)).
+				Info("extracted usage from openrouter SSE response")
 		}
 	}()
 	ctx.Opaque.PostResponse = resp
+}
+
+func (p *openrouterProxy) recordUsage(ctx *proxy.OnContext[proxy.RespCtx], usage proxy.AnthropicUsage) {
+	ctx.Opaque.Metrics.Usage = usage
+	userData := getUserData(ctx.Opaque.ProxyCtx)
+	p.saveUsage(userData, usage)
+}
+
+func (p *openrouterProxy) saveUsage(data *UserData, usage proxy.AnthropicUsage) {
+	if data == nil {
+		return
+	}
+
+	record, err := p.db.AnthropicUsage.Create().
+		SetDeviceID(data.DeviceID).
+		SetSessionID(data.SessionID).
+		SetAccountUUID(data.AccountUUID).
+		SetInputTokens(usage.InputTokens).
+		SetCacheReadInputTokens(usage.CacheReadInputTokens).
+		SetCacheCreationInputTokens(usage.CacheCreationInputTokens).
+		SetOutputTokens(usage.OutputTokens).
+		SetCacheCreationEphemeral5mInputTokens(usage.CacheCreation.Ephemeral5mInputTokens).
+		SetCacheCreationEphemeral1hInputTokens(usage.CacheCreation.Ephemeral1hInputTokens).
+		SetCacheHitRate(usage.CacheHitRate()).
+		SetRaw(usage.RawString()).
+		Save(context.Background())
+	if err != nil {
+		logrus.WithError(err).
+			WithFields(p.usageFields(usage)).
+			Warn("failed to save openrouter usage")
+		return
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"id":           record.ID,
+		"device_id":    record.DeviceID,
+		"session_id":   record.SessionID,
+		"account_uuid": record.AccountUUID,
+	}).Debug("saved openrouter usage")
 }
 
 func (p *openrouterProxy) usageFields(usage proxy.AnthropicUsage) logrus.Fields {

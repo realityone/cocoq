@@ -2,6 +2,7 @@ package anthropic
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -67,8 +68,11 @@ func (p *anthropicProxy) Install(server *goproxy.ProxyHttpServer) {
 }
 
 type UserData struct {
-	Model  string
-	Stream bool
+	AccountUUID string
+	DeviceID    string
+	Model       string
+	SessionID   string
+	Stream      bool
 }
 
 func getUserData(ctx *goproxy.ProxyCtx) *UserData {
@@ -93,6 +97,30 @@ func (p *anthropicProxy) prelude(ctx *proxy.OnContext[proxy.ReqCtx]) {
 
 	data.Stream = gjson.GetBytes(body, "stream").Bool()
 	data.Model = gjson.GetBytes(body, "model").String()
+	metadataUserID := gjson.GetBytes(body, "metadata.user_id").String()
+	metadata, ok := parseRequestMetadata(metadataUserID)
+	if ok {
+		data.DeviceID = metadata.DeviceID
+		data.AccountUUID = metadata.AccountUUID
+		data.SessionID = metadata.SessionID
+	}
+}
+
+type requestMetadata struct {
+	AccountUUID string `json:"account_uuid"`
+	DeviceID    string `json:"device_id"`
+	SessionID   string `json:"session_id"`
+}
+
+func parseRequestMetadata(value string) (requestMetadata, bool) {
+	var metadata requestMetadata
+	if value = strings.TrimSpace(value); value == "" {
+		return requestMetadata{}, false
+	}
+	if err := json.Unmarshal([]byte(value), &metadata); err != nil {
+		return requestMetadata{}, false
+	}
+	return metadata, true
 }
 
 func (p *anthropicProxy) handleRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {

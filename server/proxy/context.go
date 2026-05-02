@@ -69,6 +69,25 @@ func (u *AnthropicUsage) SetRaw(raw json.RawMessage) {
 	u.raw = raw
 }
 
+func (u AnthropicUsage) CacheHitRate() float64 {
+	inputTokens := u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+	if inputTokens <= 0 {
+		return 0
+	}
+	return float64(u.CacheReadInputTokens) / float64(inputTokens)
+}
+
+func (u AnthropicUsage) RawString() string {
+	if raw := u.GetRaw(); len(raw) > 0 {
+		return string(raw)
+	}
+	body, err := json.Marshal(u)
+	if err != nil {
+		return "{}"
+	}
+	return string(body)
+}
+
 type RespCtx struct {
 	ProxyCtx *goproxy.ProxyCtx
 	Response *http.Response
