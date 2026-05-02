@@ -162,36 +162,40 @@ func TestDefaultYAMLIncludesCommentsAndAllFields(t *testing.T) {
 	content := DefaultYAML()
 	for _, want := range []string{
 		"# Global settings shared by all commands.",
-		"# global:",
+		"global:",
 		"# Root directory for runtime files.",
-		"#   root_dir:",
+		"  root_dir:",
 		"# Proxy server settings.",
-		"# server:",
+		"server:",
 		"# HTTP listen address for the local proxy server.",
-		"#   addr:",
+		"  addr:",
 		"# HAR output file path.",
-		"#   har_file:",
+		"  har_file:",
 		"# Enable verbose proxy logging.",
-		"#   verbose:",
+		"  verbose:",
 		"# Root CA files used for MITM TLS.",
-		"#   ca:",
+		"  ca:",
 		"# Root CA certificate file.",
-		"#     cert_file:",
+		"    cert_file:",
 		"# Root CA private key file.",
-		"#     key_file:",
+		"    key_file:",
 		"# Database settings.",
-		"# database:",
+		"database:",
 		"# SQLite database file path.",
-		"#   path:",
+		"  path:",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("DefaultYAML() missing %q in:\n%s", want, content)
 		}
 	}
+	hasActiveYAMLLine := false
 	for _, line := range strings.Split(content, "\n") {
-		if line != "" && !strings.HasPrefix(line, "#") {
-			t.Fatalf("DefaultYAML() line is not commented: %q\n%s", line, content)
+		if line != "" && !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			hasActiveYAMLLine = true
 		}
+	}
+	if !hasActiveYAMLLine {
+		t.Fatalf("DefaultYAML() has no active YAML lines:\n%s", content)
 	}
 
 	path := filepath.Join(t.TempDir(), "config.yaml")

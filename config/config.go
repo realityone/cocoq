@@ -72,7 +72,7 @@ func Default() Config {
 
 func DefaultYAML() string {
 	cfg := Default()
-	content := fmt.Sprintf(`# Default cocoq configuration.
+	return fmt.Sprintf(`# Default cocoq configuration.
 # Global settings shared by all commands.
 global:
   # Root directory for runtime files. Relative file paths below are resolved under this directory.
@@ -105,7 +105,6 @@ database:
 		yamlString(cfg.Server.CA.KeyFile),
 		yamlString(cfg.Database.Path),
 	)
-	return commentYAMLLines(content)
 }
 
 func DefaultPath() (string, error) {
@@ -133,26 +132,6 @@ func FilePath(rootDir, path string) string {
 
 func yamlString(s string) string {
 	return strconv.Quote(s)
-}
-
-func commentYAMLLines(content string) string {
-	var b strings.Builder
-	for line := range strings.Lines(content) {
-		line = strings.TrimSuffix(line, "\n")
-		if line == "" {
-			b.WriteString("#\n")
-			continue
-		}
-		if strings.HasPrefix(line, "#") {
-			b.WriteString(line)
-			b.WriteByte('\n')
-			continue
-		}
-		b.WriteString("# ")
-		b.WriteString(line)
-		b.WriteByte('\n')
-	}
-	return b.String()
 }
 
 func Load(path string) (Config, error) {

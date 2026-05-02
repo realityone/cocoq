@@ -109,17 +109,17 @@ func TestDefaultConfigCommand(t *testing.T) {
 
 	got := out.String()
 	for _, want := range []string{
-		"# global:",
-		"#   root_dir:",
-		"# server:",
-		"#   addr:",
-		"#   har_file:",
-		"#   verbose:",
-		"#   ca:",
-		"#     cert_file:",
-		"#     key_file:",
-		"# database:",
-		"#   path:",
+		"global:",
+		"  root_dir:",
+		"server:",
+		"  addr:",
+		"  har_file:",
+		"  verbose:",
+		"  ca:",
+		"    cert_file:",
+		"    key_file:",
+		"database:",
+		"  path:",
 		"# Global settings shared by all commands.",
 		"# Proxy server settings.",
 		"# Root CA files used for MITM TLS.",
@@ -131,9 +131,13 @@ func TestDefaultConfigCommand(t *testing.T) {
 			t.Fatalf("default-config output missing %q in:\n%s", want, got)
 		}
 	}
+	hasActiveYAMLLine := false
 	for _, line := range strings.Split(got, "\n") {
-		if line != "" && !strings.HasPrefix(line, "#") {
-			t.Fatalf("default-config output line is not commented: %q\n%s", line, got)
+		if line != "" && !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			hasActiveYAMLLine = true
 		}
+	}
+	if !hasActiveYAMLLine {
+		t.Fatalf("default-config output has no active YAML lines:\n%s", got)
 	}
 }
