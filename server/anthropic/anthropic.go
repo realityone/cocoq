@@ -18,6 +18,7 @@ var anthropicProxyDomains = sets.New(
 	"api.anthropic.com",
 	"downloads.claude.ai",
 	"platform.claude.com",
+	"raw.githubusercontent.com",
 )
 
 type anthropicProxy struct {
@@ -66,6 +67,7 @@ func (p *anthropicProxy) Install(server *goproxy.ProxyHttpServer) {
 }
 
 type UserData struct {
+	Model  string
 	Stream bool
 }
 
@@ -87,9 +89,10 @@ func (p *anthropicProxy) prelude(ctx *proxy.OnContext[proxy.ReqCtx]) {
 		return
 	}
 	defer req.Body.Close()
+	proxy.ReplaceRequestBody(req, body)
 
 	data.Stream = gjson.GetBytes(body, "stream").Bool()
-	proxy.ReplaceRequestBody(req, body)
+	data.Model = gjson.GetBytes(body, "model").String()
 }
 
 func (p *anthropicProxy) handleRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {

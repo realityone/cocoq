@@ -114,6 +114,7 @@ func (p *openrouterProxy) stickProviderInBody(body []byte) ([]byte, bool, error)
 
 func (p *openrouterProxy) extactUsage(ctx *proxy.OnContext[proxy.RespCtx]) {
 	data := getUserData(ctx.Opaque.ProxyCtx)
+	ctx.Opaque.Metrics.Model = data.Model
 
 	if data.Stream {
 		p.extactUsageFromSSE(ctx)
@@ -161,10 +162,26 @@ func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]
 				continue
 			}
 			ctx.Opaque.Metrics.Usage = usage
-			logrus.WithField("usage", usage).Info("extracted usage from openrouter SSE response")
+			logrus.WithField("model", ctx.Opaque.Metrics.Model).
+				WithFields(p.usageFields(usage)).Info("extracted usage from openrouter SSE response")
 		}
 	}()
 	ctx.Opaque.PostResponse = resp
+}
+
+func (p *openrouterProxy) usageFields(usage proxy.AnthropicUsage) logrus.Fields {
+	fields := logrus.Fields{
+		"input_tokens":                   usage.InputTokens,
+		"output_tokens":                  usage.OutputTokens,
+		"cache_read_input_tokens":        usage.CacheReadInputTokens,
+		"cache_creation_input_tokens":    usage.CacheCreationInputTokens,
+		"cache_creation_5m_input_tokens": usage.CacheCreation.Ephemeral5mInputTokens,
+		"cache_creation_1h_input_tokens": usage.CacheCreation.Ephemeral1hInputTokens,
+	}
+	if raw := usage.GetRaw(); len(raw) > 0 {
+		fields["usage"] = string(raw)
+	}
+	return fields
 }
 
 func (p *openrouterProxy) parseUsage(body []byte) (proxy.AnthropicUsage, bool) {

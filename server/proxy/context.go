@@ -75,6 +75,7 @@ type RespCtx struct {
 
 	PostResponse *http.Response
 	Metrics      struct {
+		Model string
 		Usage AnthropicUsage
 	}
 }

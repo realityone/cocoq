@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
@@ -170,13 +172,16 @@ func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
 		Opaque: proxy.RespCtx{
-			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{Stream: true}},
+			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{Model: "claude-sonnet-4-6", Stream: true}},
 			Response: resp,
 		},
 	}
 
 	(&openrouterProxy{}).extactUsage(ctx)
 
+	if ctx.Opaque.Metrics.Model != "claude-sonnet-4-6" {
+		t.Fatalf("Metrics.Model = %q, want claude-sonnet-4-6", ctx.Opaque.Metrics.Model)
+	}
 	if ctx.Opaque.PostResponse != resp {
 		t.Fatal("PostResponse was not set to the forwarded response")
 	}
@@ -199,6 +204,44 @@ func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
 	}
 	if len(usage.GetRaw()) == 0 {
 		t.Fatal("raw usage JSON was not recorded")
+	}
+}
+
+func TestOpenrouterUsageLogFieldsFormatsRawUsageAsJSON(t *testing.T) {
+	var out bytes.Buffer
+	logger := logrus.StandardLogger()
+	originalOut := logger.Out
+	originalFormatter := logger.Formatter
+	originalLevel := logger.Level
+	logger.SetOutput(&out)
+	logger.SetFormatter(&logrus.TextFormatter{
+		DisableTimestamp: true,
+		DisableQuote:     true,
+	})
+	logger.SetLevel(logrus.InfoLevel)
+	defer func() {
+		logger.SetOutput(originalOut)
+		logger.SetFormatter(originalFormatter)
+		logger.SetLevel(originalLevel)
+	}()
+
+	usage := proxy.AnthropicUsage{
+		InputTokens:              1,
+		OutputTokens:             199,
+		CacheReadInputTokens:     57010,
+		CacheCreationInputTokens: 338,
+	}
+	usage.CacheCreation.Ephemeral1hInputTokens = 338
+	usage.SetRaw([]byte(`{"input_tokens":1,"output_tokens":199,"cache_creation_input_tokens":338,"cache_read_input_tokens":57010}`))
+
+	logrus.WithFields((&openrouterProxy{}).usageFields(usage)).Info("extracted usage from openrouter SSE response")
+
+	got := out.String()
+	if !strings.Contains(got, `usage={"input_tokens":1,"output_tokens":199,"cache_creation_input_tokens":338,"cache_read_input_tokens":57010}`) {
+		t.Fatalf("log output = %q, want usage field to contain raw JSON", got)
+	}
+	if strings.Contains(got, "[123 34 105 110") {
+		t.Fatalf("log output = %q, unexpectedly contained byte-slice dump", got)
 	}
 }
 
