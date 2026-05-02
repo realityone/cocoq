@@ -70,6 +70,20 @@ func (_u *AnthropicUsageUpdate) SetNillableAccountUUID(v *string) *AnthropicUsag
 	return _u
 }
 
+// SetModel sets the "model" field.
+func (_u *AnthropicUsageUpdate) SetModel(v string) *AnthropicUsageUpdate {
+	_u.mutation.SetModel(v)
+	return _u
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_u *AnthropicUsageUpdate) SetNillableModel(v *string) *AnthropicUsageUpdate {
+	if v != nil {
+		_u.SetModel(*v)
+	}
+	return _u
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_u *AnthropicUsageUpdate) SetInputTokens(v int64) *AnthropicUsageUpdate {
 	_u.mutation.ResetInputTokens()
@@ -296,6 +310,9 @@ func (_u *AnthropicUsageUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.AccountUUID(); ok {
 		_spec.SetField(anthropicusage.FieldAccountUUID, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Model(); ok {
+		_spec.SetField(anthropicusage.FieldModel, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(anthropicusage.FieldInputTokens, field.TypeInt64, value)
 	}
@@ -402,6 +419,20 @@ func (_u *AnthropicUsageUpdateOne) SetAccountUUID(v string) *AnthropicUsageUpdat
 func (_u *AnthropicUsageUpdateOne) SetNillableAccountUUID(v *string) *AnthropicUsageUpdateOne {
 	if v != nil {
 		_u.SetAccountUUID(*v)
+	}
+	return _u
+}
+
+// SetModel sets the "model" field.
+func (_u *AnthropicUsageUpdateOne) SetModel(v string) *AnthropicUsageUpdateOne {
+	_u.mutation.SetModel(v)
+	return _u
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_u *AnthropicUsageUpdateOne) SetNillableModel(v *string) *AnthropicUsageUpdateOne {
+	if v != nil {
+		_u.SetModel(*v)
 	}
 	return _u
 }
@@ -661,6 +692,9 @@ func (_u *AnthropicUsageUpdateOne) sqlSave(ctx context.Context) (_node *Anthropi
 	}
 	if value, ok := _u.mutation.AccountUUID(); ok {
 		_spec.SetField(anthropicusage.FieldAccountUUID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Model(); ok {
+		_spec.SetField(anthropicusage.FieldModel, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(anthropicusage.FieldInputTokens, field.TypeInt64, value)

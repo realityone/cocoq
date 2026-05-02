@@ -15,12 +15,16 @@ import (
 func init() {
 	anthropicusageFields := schema.AnthropicUsage{}.Fields()
 	_ = anthropicusageFields
+	// anthropicusageDescModel is the schema descriptor for model field.
+	anthropicusageDescModel := anthropicusageFields[3].Descriptor()
+	// anthropicusage.DefaultModel holds the default value on creation for the model field.
+	anthropicusage.DefaultModel = anthropicusageDescModel.Default.(string)
 	// anthropicusageDescCreatedAt is the schema descriptor for created_at field.
-	anthropicusageDescCreatedAt := anthropicusageFields[11].Descriptor()
+	anthropicusageDescCreatedAt := anthropicusageFields[12].Descriptor()
 	// anthropicusage.DefaultCreatedAt holds the default value on creation for the created_at field.
 	anthropicusage.DefaultCreatedAt = anthropicusageDescCreatedAt.Default.(func() time.Time)
 	// anthropicusageDescUpdatedAt is the schema descriptor for updated_at field.
-	anthropicusageDescUpdatedAt := anthropicusageFields[12].Descriptor()
+	anthropicusageDescUpdatedAt := anthropicusageFields[13].Descriptor()
 	// anthropicusage.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	anthropicusage.DefaultUpdatedAt = anthropicusageDescUpdatedAt.Default.(func() time.Time)
 	// anthropicusage.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

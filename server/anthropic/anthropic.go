@@ -140,6 +140,7 @@ func (p *anthropicProxy) saveUsage(ctx context.Context, data *UserData, usage pr
 		SetDeviceID(data.DeviceID).
 		SetSessionID(data.SessionID).
 		SetAccountUUID(data.AccountUUID).
+		SetModel(data.Model).
 		SetInputTokens(usage.InputTokens).
 		SetCacheReadInputTokens(usage.CacheReadInputTokens).
 		SetCacheCreationInputTokens(usage.CacheCreationInputTokens).
@@ -161,6 +162,7 @@ func (p *anthropicProxy) saveUsage(ctx context.Context, data *UserData, usage pr
 		"device_id":    record.DeviceID,
 		"session_id":   record.SessionID,
 		"account_uuid": record.AccountUUID,
+		"model":        record.Model,
 	}).Debug("saved anthropic usage")
 }
 

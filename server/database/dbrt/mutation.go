@@ -36,6 +36,7 @@ type AnthropicUsageMutation struct {
 	device_id                                   *string
 	session_id                                  *string
 	account_uuid                                *string
+	model                                       *string
 	input_tokens                                *int64
 	addinput_tokens                             *int64
 	cache_read_input_tokens                     *int64
@@ -263,6 +264,42 @@ func (m *AnthropicUsageMutation) OldAccountUUID(ctx context.Context) (v string, 
 // ResetAccountUUID resets all changes to the "account_uuid" field.
 func (m *AnthropicUsageMutation) ResetAccountUUID() {
 	m.account_uuid = nil
+}
+
+// SetModel sets the "model" field.
+func (m *AnthropicUsageMutation) SetModel(s string) {
+	m.model = &s
+}
+
+// Model returns the value of the "model" field in the mutation.
+func (m *AnthropicUsageMutation) Model() (r string, exists bool) {
+	v := m.model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModel returns the old "model" field's value of the AnthropicUsage entity.
+// If the AnthropicUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AnthropicUsageMutation) OldModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModel: %w", err)
+	}
+	return oldValue.Model, nil
+}
+
+// ResetModel resets all changes to the "model" field.
+func (m *AnthropicUsageMutation) ResetModel() {
+	m.model = nil
 }
 
 // SetInputTokens sets the "input_tokens" field.
@@ -799,7 +836,7 @@ func (m *AnthropicUsageMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AnthropicUsageMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.device_id != nil {
 		fields = append(fields, anthropicusage.FieldDeviceID)
 	}
@@ -808,6 +845,9 @@ func (m *AnthropicUsageMutation) Fields() []string {
 	}
 	if m.account_uuid != nil {
 		fields = append(fields, anthropicusage.FieldAccountUUID)
+	}
+	if m.model != nil {
+		fields = append(fields, anthropicusage.FieldModel)
 	}
 	if m.input_tokens != nil {
 		fields = append(fields, anthropicusage.FieldInputTokens)
@@ -853,6 +893,8 @@ func (m *AnthropicUsageMutation) Field(name string) (ent.Value, bool) {
 		return m.SessionID()
 	case anthropicusage.FieldAccountUUID:
 		return m.AccountUUID()
+	case anthropicusage.FieldModel:
+		return m.Model()
 	case anthropicusage.FieldInputTokens:
 		return m.InputTokens()
 	case anthropicusage.FieldCacheReadInputTokens:
@@ -888,6 +930,8 @@ func (m *AnthropicUsageMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldSessionID(ctx)
 	case anthropicusage.FieldAccountUUID:
 		return m.OldAccountUUID(ctx)
+	case anthropicusage.FieldModel:
+		return m.OldModel(ctx)
 	case anthropicusage.FieldInputTokens:
 		return m.OldInputTokens(ctx)
 	case anthropicusage.FieldCacheReadInputTokens:
@@ -937,6 +981,13 @@ func (m *AnthropicUsageMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAccountUUID(v)
+		return nil
+	case anthropicusage.FieldModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModel(v)
 		return nil
 	case anthropicusage.FieldInputTokens:
 		v, ok := value.(int64)
@@ -1152,6 +1203,9 @@ func (m *AnthropicUsageMutation) ResetField(name string) error {
 		return nil
 	case anthropicusage.FieldAccountUUID:
 		m.ResetAccountUUID()
+		return nil
+	case anthropicusage.FieldModel:
+		m.ResetModel()
 		return nil
 	case anthropicusage.FieldInputTokens:
 		m.ResetInputTokens()

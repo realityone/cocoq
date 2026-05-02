@@ -19,6 +19,8 @@ const (
 	FieldSessionID = "session_id"
 	// FieldAccountUUID holds the string denoting the account_uuid field in the database.
 	FieldAccountUUID = "account_uuid"
+	// FieldModel holds the string denoting the model field in the database.
+	FieldModel = "model"
 	// FieldInputTokens holds the string denoting the input_tokens field in the database.
 	FieldInputTokens = "input_tokens"
 	// FieldCacheReadInputTokens holds the string denoting the cache_read_input_tokens field in the database.
@@ -49,6 +51,7 @@ var Columns = []string{
 	FieldDeviceID,
 	FieldSessionID,
 	FieldAccountUUID,
+	FieldModel,
 	FieldInputTokens,
 	FieldCacheReadInputTokens,
 	FieldCacheCreationInputTokens,
@@ -72,6 +75,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultModel holds the default value on creation for the "model" field.
+	DefaultModel string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -101,6 +106,11 @@ func BySessionID(opts ...sql.OrderTermOption) OrderOption {
 // ByAccountUUID orders the results by the account_uuid field.
 func ByAccountUUID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAccountUUID, opts...).ToFunc()
+}
+
+// ByModel orders the results by the model field.
+func ByModel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldModel, opts...).ToFunc()
 }
 
 // ByInputTokens orders the results by the input_tokens field.

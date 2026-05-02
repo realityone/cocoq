@@ -130,6 +130,7 @@ func TestOpenrouterExtractUsageSavesNonStreamUsage(t *testing.T) {
 				DeviceID:    "device-1",
 				SessionID:   "session-1",
 				AccountUUID: "account-1",
+				Model:       "claude-sonnet-4-6",
 			}),
 			Response: resp,
 		},
@@ -146,6 +147,9 @@ func TestOpenrouterExtractUsageSavesNonStreamUsage(t *testing.T) {
 	}
 	if record.AccountUUID != "account-1" {
 		t.Fatalf("AccountUUID = %q, want account-1", record.AccountUUID)
+	}
+	if record.Model != "claude-sonnet-4-6" {
+		t.Fatalf("Model = %q, want claude-sonnet-4-6", record.Model)
 	}
 	if record.InputTokens != 3 {
 		t.Fatalf("InputTokens = %d, want 3", record.InputTokens)
@@ -281,6 +285,9 @@ func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
 	if record.AccountUUID != "account-2" {
 		t.Fatalf("AccountUUID = %q, want account-2", record.AccountUUID)
 	}
+	if record.Model != "claude-sonnet-4-6" {
+		t.Fatalf("Model = %q, want claude-sonnet-4-6", record.Model)
+	}
 	if record.CacheReadInputTokens != 24804 {
 		t.Fatalf("CacheReadInputTokens = %d, want 24804", record.CacheReadInputTokens)
 	}
@@ -309,6 +316,7 @@ func TestOpenrouterExtractUsageFromStreamResponseSavesEveryUsage(t *testing.T) {
 				DeviceID:    "device-3",
 				SessionID:   "session-3",
 				AccountUUID: "account-3",
+				Model:       "claude-sonnet-4-6",
 				Stream:      true,
 			}),
 			Response: resp,
@@ -323,6 +331,9 @@ func TestOpenrouterExtractUsageFromStreamResponseSavesEveryUsage(t *testing.T) {
 	records := waitForUsageRecordCount(t, client, 2)
 	outputTokens := map[int64]bool{}
 	for _, record := range records {
+		if record.Model != "claude-sonnet-4-6" {
+			t.Fatalf("Model = %q, want claude-sonnet-4-6", record.Model)
+		}
 		outputTokens[record.OutputTokens] = true
 	}
 	if !outputTokens[2] || !outputTokens[6] {

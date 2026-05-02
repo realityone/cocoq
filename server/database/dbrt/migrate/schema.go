@@ -15,6 +15,7 @@ var (
 		{Name: "device_id", Type: field.TypeString},
 		{Name: "session_id", Type: field.TypeString},
 		{Name: "account_uuid", Type: field.TypeString},
+		{Name: "model", Type: field.TypeString, Default: ""},
 		{Name: "input_tokens", Type: field.TypeInt64},
 		{Name: "cache_read_input_tokens", Type: field.TypeInt64},
 		{Name: "cache_creation_input_tokens", Type: field.TypeInt64},
@@ -35,12 +36,12 @@ var (
 			{
 				Name:    "anthropicusage_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{AnthropicUsageColumns[12]},
+				Columns: []*schema.Column{AnthropicUsageColumns[13]},
 			},
 			{
 				Name:    "anthropicusage_cache_hit_rate",
 				Unique:  false,
-				Columns: []*schema.Column{AnthropicUsageColumns[10]},
+				Columns: []*schema.Column{AnthropicUsageColumns[11]},
 			},
 		},
 	}

@@ -23,6 +23,8 @@ type AnthropicUsage struct {
 	SessionID string `json:"session_id,omitempty"`
 	// AccountUUID holds the value of the "account_uuid" field.
 	AccountUUID string `json:"account_uuid,omitempty"`
+	// Model holds the value of the "model" field.
+	Model string `json:"model,omitempty"`
 	// InputTokens holds the value of the "input_tokens" field.
 	InputTokens int64 `json:"input_tokens,omitempty"`
 	// CacheReadInputTokens holds the value of the "cache_read_input_tokens" field.
@@ -55,7 +57,7 @@ func (*AnthropicUsage) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case anthropicusage.FieldID, anthropicusage.FieldInputTokens, anthropicusage.FieldCacheReadInputTokens, anthropicusage.FieldCacheCreationInputTokens, anthropicusage.FieldOutputTokens, anthropicusage.FieldCacheCreationEphemeral5mInputTokens, anthropicusage.FieldCacheCreationEphemeral1hInputTokens:
 			values[i] = new(sql.NullInt64)
-		case anthropicusage.FieldDeviceID, anthropicusage.FieldSessionID, anthropicusage.FieldAccountUUID, anthropicusage.FieldRaw:
+		case anthropicusage.FieldDeviceID, anthropicusage.FieldSessionID, anthropicusage.FieldAccountUUID, anthropicusage.FieldModel, anthropicusage.FieldRaw:
 			values[i] = new(sql.NullString)
 		case anthropicusage.FieldCreatedAt, anthropicusage.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -97,6 +99,12 @@ func (_m *AnthropicUsage) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field account_uuid", values[i])
 			} else if value.Valid {
 				_m.AccountUUID = value.String
+			}
+		case anthropicusage.FieldModel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field model", values[i])
+			} else if value.Valid {
+				_m.Model = value.String
 			}
 		case anthropicusage.FieldInputTokens:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -202,6 +210,9 @@ func (_m *AnthropicUsage) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("account_uuid=")
 	builder.WriteString(_m.AccountUUID)
+	builder.WriteString(", ")
+	builder.WriteString("model=")
+	builder.WriteString(_m.Model)
 	builder.WriteString(", ")
 	builder.WriteString("input_tokens=")
 	builder.WriteString(fmt.Sprintf("%v", _m.InputTokens))

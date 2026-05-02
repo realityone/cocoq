@@ -20,6 +20,9 @@ func TestAnthropicUsageCommandListGetAndDelete(t *testing.T) {
 	if !strings.Contains(listOut, "device-1") {
 		t.Fatalf("list output = %q, want device id", listOut)
 	}
+	if !strings.Contains(listOut, "claude-sonnet-4-6") {
+		t.Fatalf("list output = %q, want model", listOut)
+	}
 
 	getOut := executeDBCommand(t, dbPath, "anthropic-usage", "get", "1")
 	if !strings.Contains(getOut, "0.25") {
@@ -64,6 +67,7 @@ func seedAnthropicUsage(t *testing.T, dbPath string) int {
 		SetDeviceID("device-1").
 		SetSessionID("session-1").
 		SetAccountUUID("account-1").
+		SetModel("claude-sonnet-4-6").
 		SetInputTokens(100).
 		SetCacheReadInputTokens(20).
 		SetCacheCreationInputTokens(30).

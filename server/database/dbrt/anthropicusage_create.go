@@ -38,6 +38,20 @@ func (_c *AnthropicUsageCreate) SetAccountUUID(v string) *AnthropicUsageCreate {
 	return _c
 }
 
+// SetModel sets the "model" field.
+func (_c *AnthropicUsageCreate) SetModel(v string) *AnthropicUsageCreate {
+	_c.mutation.SetModel(v)
+	return _c
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_c *AnthropicUsageCreate) SetNillableModel(v *string) *AnthropicUsageCreate {
+	if v != nil {
+		_c.SetModel(*v)
+	}
+	return _c
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_c *AnthropicUsageCreate) SetInputTokens(v int64) *AnthropicUsageCreate {
 	_c.mutation.SetInputTokens(v)
@@ -149,6 +163,10 @@ func (_c *AnthropicUsageCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *AnthropicUsageCreate) defaults() {
+	if _, ok := _c.mutation.Model(); !ok {
+		v := anthropicusage.DefaultModel
+		_c.mutation.SetModel(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := anthropicusage.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -169,6 +187,9 @@ func (_c *AnthropicUsageCreate) check() error {
 	}
 	if _, ok := _c.mutation.AccountUUID(); !ok {
 		return &ValidationError{Name: "account_uuid", err: errors.New(`dbrt: missing required field "AnthropicUsage.account_uuid"`)}
+	}
+	if _, ok := _c.mutation.Model(); !ok {
+		return &ValidationError{Name: "model", err: errors.New(`dbrt: missing required field "AnthropicUsage.model"`)}
 	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		return &ValidationError{Name: "input_tokens", err: errors.New(`dbrt: missing required field "AnthropicUsage.input_tokens"`)}
@@ -237,6 +258,10 @@ func (_c *AnthropicUsageCreate) createSpec() (*AnthropicUsage, *sqlgraph.CreateS
 	if value, ok := _c.mutation.AccountUUID(); ok {
 		_spec.SetField(anthropicusage.FieldAccountUUID, field.TypeString, value)
 		_node.AccountUUID = value
+	}
+	if value, ok := _c.mutation.Model(); ok {
+		_spec.SetField(anthropicusage.FieldModel, field.TypeString, value)
+		_node.Model = value
 	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(anthropicusage.FieldInputTokens, field.TypeInt64, value)

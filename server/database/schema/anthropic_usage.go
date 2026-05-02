@@ -25,6 +25,8 @@ func (AnthropicUsage) Fields() []ent.Field {
 		field.String("device_id"),
 		field.String("session_id"),
 		field.String("account_uuid"),
+		field.String("model").
+			Default(""),
 		field.Int64("input_tokens"),
 		field.Int64("cache_read_input_tokens"),
 		field.Int64("cache_creation_input_tokens"),

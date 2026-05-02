@@ -125,15 +125,16 @@ func parseIDArg(value string) (int, error) {
 
 func printAnthropicUsages(cmd *cobra.Command, records []*dbrt.AnthropicUsage) {
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tDEVICE ID\tSESSION ID\tACCOUNT UUID\tINPUT TOKENS\tCACHE READ INPUT TOKENS\tCACHE CREATION INPUT TOKENS\tOUTPUT TOKENS\tCACHE CREATION 5M INPUT TOKENS\tCACHE CREATION 1H INPUT TOKENS\tCACHE HIT RATE\tRAW\tCREATED AT\tUPDATED AT")
+	fmt.Fprintln(w, "ID\tDEVICE ID\tSESSION ID\tACCOUNT UUID\tMODEL\tINPUT TOKENS\tCACHE READ INPUT TOKENS\tCACHE CREATION INPUT TOKENS\tOUTPUT TOKENS\tCACHE CREATION 5M INPUT TOKENS\tCACHE CREATION 1H INPUT TOKENS\tCACHE HIT RATE\tRAW\tCREATED AT\tUPDATED AT")
 	for _, record := range records {
 		fmt.Fprintf(
 			w,
-			"%d\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%g\t%s\t%s\t%s\n",
+			"%d\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%g\t%s\t%s\t%s\n",
 			record.ID,
 			record.DeviceID,
 			record.SessionID,
 			record.AccountUUID,
+			record.Model,
 			record.InputTokens,
 			record.CacheReadInputTokens,
 			record.CacheCreationInputTokens,
