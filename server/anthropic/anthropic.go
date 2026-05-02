@@ -14,6 +14,7 @@ import (
 	"github.com/elazarl/goproxy"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -57,14 +58,33 @@ func (p *anthropicProxy) Install(server *goproxy.ProxyHttpServer) {
 	// Reject event logging requests
 	server.OnRequest(anthropicEventLoggingCondition()).
 		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+			response := `{"accepted_count": 0, "rejected_count": 0}`
+			reqBody, err := io.ReadAll(req.Body)
+			if err != nil {
+				logrus.WithError(err).Warn("failed to read anthropic request body for event logging")
+				return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
+			}
+			defer req.Body.Close()
+
+			events := gjson.GetBytes(reqBody, "events")
+			if !events.IsArray() {
+				logrus.Warn("anthropic event logging request body does not contain events array")
+				return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
+			}
 			logrus.WithFields(logrus.Fields{
-				"session": ctx.Session,
-				"service": "anthropic",
-				"host":    req.Host,
-				"url":     req.URL.String(),
-				"method":  req.Method,
-			}).Info("rejected anthropic event logging request")
-			return req, goproxy.NewResponse(req, "application/json", http.StatusNotFound, http.StatusText(http.StatusNotFound))
+				"session":     ctx.Session,
+				"service":     "anthropic",
+				"host":        req.Host,
+				"url":         req.URL.String(),
+				"method":      req.Method,
+				"event_count": len(events.Array()),
+			}).Info("response a fake anthropic event logging request")
+			response1, err := sjson.Set(response, "accepted_count", len(events.Array()))
+			if err != nil {
+				logrus.WithError(err).Warn("failed to set accepted_count in anthropic event logging response")
+				return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
+			}
+			return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response1)
 		})
 	// Handle /v1/messages API requests
 	server.OnRequest(anthropicV1MessagesCondition()).DoFunc(p.handleRequest)
@@ -204,7 +224,8 @@ func anthropicEventLoggingCondition() goproxy.ReqConditionFunc {
 func anthropicV1MessagesCondition() goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		return strings.ToLower(req.URL.Hostname()) == "api.anthropic.com" &&
-			strings.ToLower(req.URL.Path) == "/v1/messages"
+			strings.ToLower(req.URL.Path) == "/v1/messages" &&
+			req.Method == http.MethodPost
 	}
 }
 
