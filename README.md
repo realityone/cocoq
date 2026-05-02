@@ -24,6 +24,12 @@ go run ./cmd/cocoq server run
 
 Configuration is loaded from `~/.cocoq/config.yaml` when that file exists:
 
+Print a commented default config:
+
+```sh
+go run ./cmd/cocoq default-config
+```
+
 ```yaml
 global:
   root_dir: /Users/you/.cocoq

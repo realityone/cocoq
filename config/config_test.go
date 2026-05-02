@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -152,5 +153,77 @@ server:
 	}
 	if cfg.Server.CA.CertFile != "ca.crt" {
 		t.Fatalf("cfg.Server.CA.CertFile = %q, want %q", cfg.Server.CA.CertFile, "ca.crt")
+	}
+}
+
+func TestDefaultYAMLIncludesCommentsAndAllFields(t *testing.T) {
+	t.Setenv("HOME", "/tmp/cocoq-home")
+
+	content := DefaultYAML()
+	for _, want := range []string{
+		"# Global settings shared by all commands.",
+		"# global:",
+		"# Root directory for runtime files.",
+		"#   root_dir:",
+		"# Proxy server settings.",
+		"# server:",
+		"# HTTP listen address for the local proxy server.",
+		"#   addr:",
+		"# HAR output file path.",
+		"#   har_file:",
+		"# Enable verbose proxy logging.",
+		"#   verbose:",
+		"# Root CA files used for MITM TLS.",
+		"#   ca:",
+		"# Root CA certificate file.",
+		"#     cert_file:",
+		"# Root CA private key file.",
+		"#     key_file:",
+		"# Database settings.",
+		"# database:",
+		"# SQLite database file path.",
+		"#   path:",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("DefaultYAML() missing %q in:\n%s", want, content)
+		}
+	}
+	for _, line := range strings.Split(content, "\n") {
+		if line != "" && !strings.HasPrefix(line, "#") {
+			t.Fatalf("DefaultYAML() line is not commented: %q\n%s", line, content)
+		}
+	}
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	wantRootDir := filepath.Join("/tmp/cocoq-home", ".cocoq")
+	if cfg.Global.RootDir != wantRootDir {
+		t.Fatalf("cfg.Global.RootDir = %q, want %q", cfg.Global.RootDir, wantRootDir)
+	}
+	if cfg.Server.Addr != "127.0.0.1:8888" {
+		t.Fatalf("cfg.Server.Addr = %q, want %q", cfg.Server.Addr, "127.0.0.1:8888")
+	}
+	if cfg.Server.HARFile != "" {
+		t.Fatalf("cfg.Server.HARFile = %q, want empty", cfg.Server.HARFile)
+	}
+	if cfg.Server.Verbose {
+		t.Fatal("cfg.Server.Verbose = true, want false")
+	}
+	if cfg.Server.CA.CertFile != "ca.crt" {
+		t.Fatalf("cfg.Server.CA.CertFile = %q, want %q", cfg.Server.CA.CertFile, "ca.crt")
+	}
+	if cfg.Server.CA.KeyFile != "ca.key" {
+		t.Fatalf("cfg.Server.CA.KeyFile = %q, want %q", cfg.Server.CA.KeyFile, "ca.key")
+	}
+	if cfg.Database.Path != "database.db" {
+		t.Fatalf("cfg.Database.Path = %q, want %q", cfg.Database.Path, "database.db")
 	}
 }

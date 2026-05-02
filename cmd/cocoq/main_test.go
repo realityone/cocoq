@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +92,48 @@ func TestDBCommandUsesConfigDatabasePath(t *testing.T) {
 	}
 	if _, err := os.Stat(dbPath); err != nil {
 		t.Fatalf("stat configured database path: %v", err)
+	}
+}
+
+func TestDefaultConfigCommand(t *testing.T) {
+	t.Setenv("HOME", "/tmp/cocoq-home")
+
+	cmd := newDefaultConfigCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		"# global:",
+		"#   root_dir:",
+		"# server:",
+		"#   addr:",
+		"#   har_file:",
+		"#   verbose:",
+		"#   ca:",
+		"#     cert_file:",
+		"#     key_file:",
+		"# database:",
+		"#   path:",
+		"# Global settings shared by all commands.",
+		"# Proxy server settings.",
+		"# Root CA files used for MITM TLS.",
+		"# Database settings.",
+		"# Root directory for runtime files.",
+		"# SQLite database file path.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("default-config output missing %q in:\n%s", want, got)
+		}
+	}
+	for _, line := range strings.Split(got, "\n") {
+		if line != "" && !strings.HasPrefix(line, "#") {
+			t.Fatalf("default-config output line is not commented: %q\n%s", line, got)
+		}
 	}
 }

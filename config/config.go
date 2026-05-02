@@ -2,8 +2,10 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	pkgerrors "github.com/pkg/errors"
@@ -68,6 +70,44 @@ func Default() Config {
 	}
 }
 
+func DefaultYAML() string {
+	cfg := Default()
+	content := fmt.Sprintf(`# Default cocoq configuration.
+# Global settings shared by all commands.
+global:
+  # Root directory for runtime files. Relative file paths below are resolved under this directory.
+  root_dir: %s
+
+# Proxy server settings.
+server:
+  # HTTP listen address for the local proxy server.
+  addr: %s
+  # HAR output file path. Empty disables HAR export.
+  har_file: %s
+  # Enable verbose proxy logging.
+  verbose: %t
+  # Root CA files used for MITM TLS.
+  ca:
+    # Root CA certificate file. Absolute paths are used directly.
+    cert_file: %s
+    # Root CA private key file. Absolute paths are used directly.
+    key_file: %s
+
+# Database settings.
+database:
+  # SQLite database file path. Absolute paths are used directly.
+  path: %s
+`, yamlString(cfg.Global.RootDir),
+		yamlString(cfg.Server.Addr),
+		yamlString(cfg.Server.HARFile),
+		cfg.Server.Verbose,
+		yamlString(cfg.Server.CA.CertFile),
+		yamlString(cfg.Server.CA.KeyFile),
+		yamlString(cfg.Database.Path),
+	)
+	return commentYAMLLines(content)
+}
+
 func DefaultPath() (string, error) {
 	rootDir, err := DefaultRootDir()
 	if err != nil {
@@ -89,6 +129,30 @@ func FilePath(rootDir, path string) string {
 		return path
 	}
 	return filepath.Join(rootDir, path)
+}
+
+func yamlString(s string) string {
+	return strconv.Quote(s)
+}
+
+func commentYAMLLines(content string) string {
+	var b strings.Builder
+	for line := range strings.Lines(content) {
+		line = strings.TrimSuffix(line, "\n")
+		if line == "" {
+			b.WriteString("#\n")
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			b.WriteString(line)
+			b.WriteByte('\n')
+			continue
+		}
+		b.WriteString("# ")
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 func Load(path string) (Config, error) {

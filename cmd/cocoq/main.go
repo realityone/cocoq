@@ -35,6 +35,7 @@ var serverCmd = &cobra.Command{
 }
 
 var dbCmd = newDBCmd()
+var defaultConfigCmd = newDefaultConfigCmd()
 
 var serverRunCmd = &cobra.Command{
 	Use:   "run",
@@ -66,6 +67,7 @@ func init() {
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(dbCmd)
+	rootCmd.AddCommand(defaultConfigCmd)
 }
 
 func loadConfig() (appconfig.Config, error) {
@@ -86,4 +88,16 @@ func newDBCmd() *cobra.Command {
 		return cfg.Database, nil
 	})
 	return cmd
+}
+
+func newDefaultConfigCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "default-config",
+		Short: "Print the default config file",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprint(cmd.OutOrStdout(), appconfig.DefaultYAML())
+			return err
+		},
+	}
 }
