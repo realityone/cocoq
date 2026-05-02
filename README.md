@@ -1,6 +1,6 @@
 # cocoq
 
-cocoq is a local HTTP MITM proxy for Claude/Anthropic traffic. It intercepts Anthropic-style `/v1/messages` requests, applies cache-related request rewrites, captures OpenRouter usage records, and logs proxy traffic with TLS ClientHello fingerprints when available.
+cocoq is a local HTTP MITM proxy for Claude traffic through OpenRouter. It currently proxies OpenRouter Anthropic-compatible `/api/v1/messages` requests, applies some prompt caching features, and rejects Anthropic event logging endpoints.
 
 ## Features
 
