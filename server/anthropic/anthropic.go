@@ -94,7 +94,7 @@ func (data *UserData) context() context.Context {
 }
 
 func (data *UserData) cancelSession() {
-	if data != nil && data.sessionCancel != nil {
+	if data.sessionCancel != nil {
 		data.sessionCancel()
 	}
 }
