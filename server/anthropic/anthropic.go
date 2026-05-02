@@ -72,6 +72,9 @@ func (p *anthropicProxy) Install(server *goproxy.ProxyHttpServer) {
 }
 
 type UserData struct {
+	SessionContext context.Context
+	sessionCancel  context.CancelFunc
+
 	AccountUUID string
 	DeviceID    string
 	Model       string
@@ -83,8 +86,25 @@ func getUserData(ctx *goproxy.ProxyCtx) *UserData {
 	return ctx.UserData.(*UserData)
 }
 
+func (data *UserData) context() context.Context {
+	if data.SessionContext != nil {
+		return data.SessionContext
+	}
+	return context.Background()
+}
+
+func (data *UserData) cancelSession() {
+	if data != nil && data.sessionCancel != nil {
+		data.sessionCancel()
+	}
+}
+
 func (p *anthropicProxy) prelude(ctx *proxy.OnContext[proxy.ReqCtx]) {
-	data := &UserData{}
+	sessionCtx, sessionCancel := context.WithCancel(context.Background())
+	data := &UserData{
+		SessionContext: sessionCtx,
+		sessionCancel:  sessionCancel,
+	}
 	ctx.Opaque.ProxyCtx.UserData = data
 	req := ctx.Opaque.Request
 	if req.Body == nil {
@@ -132,10 +152,14 @@ func (p *anthropicProxy) handleRequest(req *http.Request, ctx *goproxy.ProxyCtx)
 }
 
 func (p *anthropicProxy) handleResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+	userData := getUserData(ctx)
+	if !userData.Stream || len(p.onResponse) == 0 {
+		defer userData.cancelSession()
+	}
 	return proxy.HandleOnResponse(resp, ctx, p.onResponse...)
 }
 
-func (p *anthropicProxy) saveUsage(ctx context.Context, data *UserData, usage proxy.AnthropicUsage) {
+func (p *anthropicProxy) saveUsage(data *UserData, usage proxy.AnthropicUsage) {
 	record, err := p.db.AnthropicUsage.Create().
 		SetDeviceID(data.DeviceID).
 		SetSessionID(data.SessionID).
@@ -149,7 +173,7 @@ func (p *anthropicProxy) saveUsage(ctx context.Context, data *UserData, usage pr
 		SetCacheCreationEphemeral1hInputTokens(usage.CacheCreation.Ephemeral1hInputTokens).
 		SetCacheHitRate(usage.CacheHitRate()).
 		SetRaw(usage.RawString()).
-		Save(ctx)
+		Save(data.context())
 	if err != nil {
 		logrus.WithError(err).
 			WithFields(usageLoggingFields(usage)).

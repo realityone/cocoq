@@ -150,8 +150,10 @@ func (p *openrouterProxy) extactUsageFromBody(ctx *proxy.OnContext[proxy.RespCtx
 func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]) {
 	resp := ctx.Opaque.Response
 	events := sse.Forward(resp)
+	userData := getUserData(ctx.Opaque.ProxyCtx)
 
 	go func() {
+		defer userData.cancelSession()
 		for event := range events {
 			data, ok := event.Data.(string)
 			if !ok || !gjson.Get(data, "usage").Exists() {
@@ -173,8 +175,7 @@ func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]
 func (p *openrouterProxy) recordUsage(ctx *proxy.OnContext[proxy.RespCtx], usage proxy.AnthropicUsage) {
 	ctx.Opaque.Metrics.Usage = usage
 	userData := getUserData(ctx.Opaque.ProxyCtx)
-	reqCtx := ctx.Opaque.ProxyCtx.Req.Context()
-	p.saveUsage(reqCtx, userData, usage)
+	p.saveUsage(userData, usage)
 }
 
 func (p *openrouterProxy) parseUsage(body []byte) (proxy.AnthropicUsage, bool) {
