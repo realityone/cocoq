@@ -54,11 +54,12 @@ func (p *openrouterProxy) Install(server *goproxy.ProxyHttpServer) {
 	server.OnRequest(anthropicEventLoggingCondition()).
 		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 			logrus.WithFields(logrus.Fields{
-				"session": ctx.Session,
-				"service": "anthropic",
-				"host":    req.Host,
-				"url":     req.URL.String(),
-				"method":  req.Method,
+				"session":    ctx.Session,
+				"service":    "anthropic",
+				"host":       req.Host,
+				"url":        req.URL.String(),
+				"method":     req.Method,
+				"user_agent": req.UserAgent(),
 			}).Info("rejected anthropic event logging request")
 			return req, goproxy.NewResponse(req, "application/json", http.StatusNotFound, http.StatusText(http.StatusNotFound))
 		})

@@ -40,6 +40,7 @@ func requestLogFields(req *http.Request, ctx *goproxy.ProxyCtx) logrus.Fields {
 		fields["transfer_encoding"] = strings.Join(req.TransferEncoding, ",")
 	}
 
+	addClientTLSHandshakeFingerprint(fields, ctx)
 	return fields
 }
 
@@ -75,6 +76,7 @@ func responseLogFields(resp *http.Response, ctx *goproxy.ProxyCtx) logrus.Fields
 		fields["upstream_tls_alpn"] = resp.TLS.NegotiatedProtocol
 	}
 
+	addClientTLSHandshakeFingerprint(fields, ctx)
 	return fields
 }
 
@@ -101,5 +103,22 @@ func tlsVersion(version uint16) string {
 		return "TLS1.3"
 	default:
 		return "unknown"
+	}
+}
+
+func addClientTLSHandshakeFingerprint(fields logrus.Fields, ctx *goproxy.ProxyCtx) {
+	if ctx.TLSClientHello == nil {
+		return
+	}
+
+	hello := ctx.TLSClientHello
+	fields["client_tls_client_hello_parsed"] = hello.Parsed != nil
+	fields["client_tls_client_hello_raw_len"] = len(hello.Raw)
+	if hello.JA3 != "" {
+		fields["client_tls_ja3"] = hello.JA3
+	}
+	if hello.JA3Hash != "" {
+		fields["client_tls_fingerprint"] = hello.JA3Hash
+		fields["client_tls_ja3_hash"] = hello.JA3Hash
 	}
 }
