@@ -11,13 +11,12 @@ import (
 )
 
 const (
-	defaultDirName  = ".cocoq"
-	defaultFileName = "config.yaml"
-	defaultAddr     = "127.0.0.1:8888"
-	defaultDatabase = "database.db"
-
-	DefaultCACertFile = "ca.crt"
-	DefaultCAKeyFile  = "ca.key"
+	defaultDirName    = ".cocoq"
+	defaultFileName   = "config.yaml"
+	defaultAddr       = "127.0.0.1:8888"
+	defaultDatabase   = "database.db"
+	defaultCACertFile = "ca.crt"
+	defaultCAKeyFile  = "ca.key"
 )
 
 type Config struct {
@@ -49,7 +48,7 @@ type CAConfig struct {
 }
 
 func Default() Config {
-	rootDir := defaultRootDir()
+	rootDir, _ := DefaultRootDir()
 	return Config{
 		Global: GlobalConfig{
 			RootDir: rootDir,
@@ -58,8 +57,8 @@ func Default() Config {
 			RootDir: rootDir,
 			Addr:    defaultAddr,
 			CA: CAConfig{
-				CertFile: DefaultCACertFile,
-				KeyFile:  DefaultCAKeyFile,
+				CertFile: defaultCACertFile,
+				KeyFile:  defaultCAKeyFile,
 			},
 		},
 		Database: DatabaseConfig{
@@ -83,14 +82,6 @@ func DefaultRootDir() (string, error) {
 		return "", pkgerrors.Wrap(err, "resolve home directory")
 	}
 	return filepath.Join(homeDir, defaultDirName), nil
-}
-
-func defaultRootDir() string {
-	rootDir, err := DefaultRootDir()
-	if err != nil {
-		return ""
-	}
-	return rootDir
 }
 
 func FilePath(rootDir, path string) string {
@@ -151,7 +142,7 @@ func setDefaults(v *viper.Viper) {
 
 func applyDerivedFields(cfg *Config) {
 	if cfg.Global.RootDir == "" {
-		cfg.Global.RootDir = defaultRootDir()
+		cfg.Global.RootDir, _ = DefaultRootDir()
 	}
 	cfg.Server.RootDir = cfg.Global.RootDir
 	cfg.Database.RootDir = cfg.Global.RootDir
