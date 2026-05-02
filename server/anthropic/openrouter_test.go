@@ -357,7 +357,7 @@ func TestOpenrouterUsageLogFieldsFormatsRawUsageAsJSON(t *testing.T) {
 	usage.CacheCreation.Ephemeral1hInputTokens = 338
 	usage.SetRaw([]byte(`{"input_tokens":1,"output_tokens":199,"cache_creation_input_tokens":338,"cache_read_input_tokens":57010}`))
 
-	logrus.WithFields((&openrouterProxy{}).usageFields(usage)).Info("extracted usage from openrouter SSE response")
+	logrus.WithFields(usageLoggingFields(usage)).Info("extracted usage from openrouter SSE response")
 
 	got := out.String()
 	if !strings.Contains(got, `usage={"input_tokens":1,"output_tokens":199,"cache_creation_input_tokens":338,"cache_read_input_tokens":57010}`) {

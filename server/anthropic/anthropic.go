@@ -151,7 +151,7 @@ func (p *openrouterProxy) saveUsage(ctx context.Context, data *UserData, usage p
 		Save(ctx)
 	if err != nil {
 		logrus.WithError(err).
-			WithFields(p.usageFields(usage)).
+			WithFields(usageLoggingFields(usage)).
 			Warn("failed to save openrouter usage")
 		return
 	}
@@ -180,4 +180,19 @@ func anthropicV1MessagesCondition() goproxy.ReqConditionFunc {
 		return strings.ToLower(req.URL.Hostname()) == "api.anthropic.com" &&
 			strings.ToLower(req.URL.Path) == "/v1/messages"
 	}
+}
+
+func usageLoggingFields(usage proxy.AnthropicUsage) logrus.Fields {
+	fields := logrus.Fields{
+		"input_tokens":                   usage.InputTokens,
+		"output_tokens":                  usage.OutputTokens,
+		"cache_read_input_tokens":        usage.CacheReadInputTokens,
+		"cache_creation_input_tokens":    usage.CacheCreationInputTokens,
+		"cache_creation_5m_input_tokens": usage.CacheCreation.Ephemeral5mInputTokens,
+		"cache_creation_1h_input_tokens": usage.CacheCreation.Ephemeral1hInputTokens,
+	}
+	if raw := usage.GetRaw(); len(raw) > 0 {
+		fields["usage"] = string(raw)
+	}
+	return fields
 }
