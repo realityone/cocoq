@@ -1,8 +1,11 @@
 package database
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
+
+	appconfig "github.com/realityone/cocoq/config"
 )
 
 func TestDefaultDatabasePath(t *testing.T) {
@@ -18,10 +21,55 @@ func TestDefaultDatabasePath(t *testing.T) {
 	}
 }
 
+func TestResolveDatabasePathUsesAbsolutePathDirectly(t *testing.T) {
+	want := filepath.Join(t.TempDir(), "custom.db")
+
+	got, err := resolveDatabasePath(appconfig.DatabaseConfig{Path: want})
+	if err != nil {
+		t.Fatalf("resolveDatabasePath() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("resolveDatabasePath() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveDatabasePathUsesCocoqDirForRelativePath(t *testing.T) {
+	rootDir := filepath.Join(t.TempDir(), "root")
+
+	got, err := resolveDatabasePath(appconfig.DatabaseConfig{RootDir: rootDir, Path: "custom.db"})
+	if err != nil {
+		t.Fatalf("resolveDatabasePath() error = %v", err)
+	}
+
+	want := filepath.Join(rootDir, "custom.db")
+	if got != want {
+		t.Fatalf("resolveDatabasePath() = %q, want %q", got, want)
+	}
+}
+
+func TestOpenClientUsesCocoqDirForRelativePath(t *testing.T) {
+	rootDir := filepath.Join(t.TempDir(), "root")
+
+	client, err := OpenClient(appconfig.DatabaseConfig{RootDir: rootDir, Path: "custom.db"})
+	if err != nil {
+		t.Fatalf("OpenClient() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Fatalf("client.Close() error = %v", err)
+		}
+	})
+
+	path := filepath.Join(rootDir, "custom.db")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("stat resolved database path: %v", err)
+	}
+}
+
 func TestOpenClient(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "database")
 
-	client, err := OpenClient(path)
+	client, err := OpenClient(appconfig.DatabaseConfig{Path: path})
 	if err != nil {
 		t.Fatalf("OpenClient() error = %v", err)
 	}

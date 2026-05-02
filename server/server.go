@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
+	appconfig "github.com/realityone/cocoq/config"
 	"github.com/realityone/cocoq/server/anthropic"
-	"github.com/realityone/cocoq/server/database"
 	"github.com/realityone/cocoq/server/database/dbrt"
 	"github.com/realityone/cocoq/server/proxy"
 
@@ -18,20 +19,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
-
-const (
-	cocoqDirName = ".cocoq"
-	caCertFile   = "ca.crt"
-	caKeyFile    = "ca.key"
-)
-
-type Config struct {
-	Addr         string
-	HARFile      string
-	Verbose      bool
-	DatabasePath string
-	Logger       *logrus.Logger
-}
 
 type Server struct {
 	addr   string
@@ -45,20 +32,16 @@ type ProxyService interface {
 	Install(*goproxy.ProxyHttpServer)
 }
 
-func New(cfg Config) (*Server, error) {
-	logger := cfg.Logger
-	if logger == nil {
-		logger = logrus.New()
+func New(cfg appconfig.ServerConfig, db *dbrt.Client) (*Server, error) {
+	if db == nil {
+		return nil, errors.New("database client is required")
 	}
 
-	ca, err := proxy.LoadOrCreateCA(cocoqDirName, caCertFile, caKeyFile)
+	logger := logrus.New()
+
+	ca, err := proxy.LoadOrCreateCA(cfg.RootDir, cfg.CA.CertFile, cfg.CA.KeyFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "load or create root CA")
-	}
-
-	db, err := database.OpenClient(cfg.DatabasePath)
-	if err != nil {
-		return nil, errors.Wrap(err, "open database")
 	}
 
 	server := goproxy.NewProxyHttpServer()
@@ -74,14 +57,19 @@ func New(cfg Config) (*Server, error) {
 		ps.Install(server)
 	}
 
-	if cfg.HARFile != "" {
+	harFile := appconfig.FilePath(cfg.RootDir, cfg.HARFile)
+	if harFile != "" {
 		harLogger := har.NewLogger(
 			func(entries []har.Entry) {
 				logrus.Infof("HAR exported %d entries", len(entries))
 				if len(entries) == 0 {
 					return
 				}
-				fp, err := os.OpenFile(cfg.HARFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+				if err := os.MkdirAll(filepath.Dir(harFile), 0o700); err != nil {
+					logrus.Errorf("failed to create HAR directory: %v", err)
+					return
+				}
+				fp, err := os.OpenFile(harFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 				if err != nil {
 					logrus.Errorf("failed to open HAR file: %v", err)
 					return

@@ -29,15 +29,9 @@ func NewMitmConnectAction(ca tls.Certificate) goproxy.FuncHttpsHandler {
 	}
 }
 
-func LoadOrCreateCA(cocoqDirName, caCertFile, caKeyFile string) (tls.Certificate, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return tls.Certificate{}, errors.Wrap(err, "resolve home directory")
-	}
-
-	caDir := filepath.Join(homeDir, cocoqDirName)
-	certPath := filepath.Join(caDir, caCertFile)
-	keyPath := filepath.Join(caDir, caKeyFile)
+func LoadOrCreateCA(rootDir, caCertFile, caKeyFile string) (tls.Certificate, error) {
+	certPath := caFilePath(rootDir, caCertFile)
+	keyPath := caFilePath(rootDir, caKeyFile)
 
 	if _, err := os.Stat(certPath); err == nil {
 		if _, err := os.Stat(keyPath); err == nil {
@@ -50,11 +44,28 @@ func LoadOrCreateCA(cocoqDirName, caCertFile, caKeyFile string) (tls.Certificate
 		return tls.Certificate{}, errors.Wrap(err, "stat CA certificate")
 	}
 
-	if err := os.MkdirAll(caDir, 0o700); err != nil {
-		return tls.Certificate{}, errors.Wrap(err, "create cocoq directory")
+	if err := ensureCAFileDirs(certPath, keyPath); err != nil {
+		return tls.Certificate{}, err
 	}
 
 	return generateAndStoreCA(certPath, keyPath)
+}
+
+func caFilePath(caDir, caFile string) string {
+	if filepath.IsAbs(caFile) {
+		return caFile
+	}
+	return filepath.Join(caDir, caFile)
+}
+
+func ensureCAFileDirs(certPath, keyPath string) error {
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o700); err != nil {
+		return errors.Wrap(err, "create CA certificate directory")
+	}
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o700); err != nil {
+		return errors.Wrap(err, "create CA private key directory")
+	}
+	return nil
 }
 
 func loadCA(certPath, keyPath string) (tls.Certificate, error) {

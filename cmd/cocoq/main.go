@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	appconfig "github.com/realityone/cocoq/config"
 	"github.com/realityone/cocoq/server"
+	"github.com/realityone/cocoq/server/database"
 	"github.com/realityone/cocoq/server/database/dbcmd"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -26,10 +27,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-var serverAddr string
-var serverHARFile string
-var serverVerbose bool
-var serverDatabasePath string
+var configPath string
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
@@ -41,16 +39,18 @@ var dbCmd = newDBCmd()
 var serverRunCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Start the HTTP proxy server",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		logger := logrus.New()
+	RunE: func(_ *cobra.Command, args []string) error {
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+		db, err := database.OpenClient(cfg.Database)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
 
-		srv, err := server.New(server.Config{
-			Addr:         serverAddr,
-			HARFile:      serverHARFile,
-			Verbose:      serverVerbose,
-			DatabasePath: serverDatabasePath,
-			Logger:       logger,
-		})
+		srv, err := server.New(cfg.Server, db)
 		if err != nil {
 			return err
 		}
@@ -60,24 +60,30 @@ var serverRunCmd = &cobra.Command{
 }
 
 func init() {
-	serverRunCmd.Flags().StringVar(&serverAddr, "addr", "127.0.0.1:8888", "HTTP listen address for proxy server")
-	serverRunCmd.Flags().StringVar(&serverHARFile, "har-file", "", "write accepted proxy sessions to this HAR file")
-	serverRunCmd.Flags().StringVar(&serverDatabasePath, "database-path", "", "SQLite database path")
-	serverRunCmd.Flags().BoolVar(&serverVerbose, "verbose", false, "enable verbose proxy logging")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "config file path (default $HOME/.cocoq/config.yaml)")
+
 	serverCmd.AddCommand(serverRunCmd)
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(dbCmd)
 }
 
+func loadConfig() (appconfig.Config, error) {
+	return appconfig.Load(configPath)
+}
+
 func newDBCmd() *cobra.Command {
-	var databasePath string
 	cmd := &cobra.Command{
 		Use:     "db",
 		Aliases: []string{"database"},
 		Short:   "Database commands",
 	}
-	cmd.PersistentFlags().StringVar(&databasePath, "database-path", "", "SQLite database path")
-	dbcmd.Register(cmd, &databasePath)
+	dbcmd.Register(cmd, func() (appconfig.DatabaseConfig, error) {
+		cfg, err := loadConfig()
+		if err != nil {
+			return appconfig.DatabaseConfig{}, err
+		}
+		return cfg.Database, nil
+	})
 	return cmd
 }

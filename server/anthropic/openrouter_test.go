@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/realityone/cocoq/config"
 	"github.com/realityone/cocoq/server/database"
 	"github.com/realityone/cocoq/server/database/dbrt"
 	"github.com/realityone/cocoq/server/proxy"
@@ -452,7 +453,7 @@ func waitForUsage(t *testing.T, ctx *proxy.OnContext[proxy.RespCtx]) proxy.Anthr
 func newOpenrouterTestDB(t *testing.T) *dbrt.Client {
 	t.Helper()
 
-	client, err := database.OpenClient(filepath.Join(t.TempDir(), "database.db"))
+	client, err := database.OpenClient(config.DatabaseConfig{Path: filepath.Join(t.TempDir(), "database.db")})
 	if err != nil {
 		t.Fatalf("OpenClient() error = %v", err)
 	}

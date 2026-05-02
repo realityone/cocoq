@@ -19,24 +19,34 @@ cocoq is a local HTTP MITM proxy for Claude/Anthropic traffic. It intercepts Ant
 Run the proxy:
 
 ```sh
-go run ./cmd/cocoq server run --addr 127.0.0.1:8888
+go run ./cmd/cocoq server run
 ```
 
-Use a custom SQLite database path:
+Configuration is loaded from `~/.cocoq/config.yaml` when that file exists:
+
+```yaml
+global:
+  root_dir: /Users/you/.cocoq
+server:
+  addr: 127.0.0.1:8888
+  har_file: /tmp/cocoq.har
+  verbose: false
+  ca:
+    cert_file: ca.crt
+    key_file: ca.key
+database:
+  path: database.db
+```
+
+Use `--config <path>` before the command to load another config file:
 
 ```sh
-go run ./cmd/cocoq server run --addr 127.0.0.1:8888 --database-path /tmp/cocoq.db
+go run ./cmd/cocoq --config /tmp/cocoq.yaml server run
 ```
 
-Optional HAR logging:
+The proxy creates its local CA under `global.root_dir`. Trust that CA in clients that need HTTPS MITM interception, then point the client at `127.0.0.1:8888` as its HTTP/HTTPS proxy.
 
-```sh
-go run ./cmd/cocoq server run --addr 127.0.0.1:8888 --har-file /tmp/cocoq.har
-```
-
-The proxy creates its local CA under `~/.cocoq/`. Trust that CA in clients that need HTTPS MITM interception, then point the client at `127.0.0.1:8888` as its HTTP/HTTPS proxy.
-
-By default, runtime data is stored in `~/.cocoq/database.db`. Use `--database-path` on both `server run` and `db` commands to inspect another database.
+By default, `global.root_dir` is `$HOME/.cocoq` and runtime data is stored in `$HOME/.cocoq/database.db`. Set `database.path` in the config file to use another database for `server run` and `db` commands. Absolute file paths are used directly; relative paths are resolved under `global.root_dir`.
 
 ## Usage Records
 
@@ -57,12 +67,6 @@ Get or delete a specific usage record:
 ```sh
 go run ./cmd/cocoq db anthropic-usage get 1
 go run ./cmd/cocoq db anthropic-usage delete 1
-```
-
-Use a custom database path:
-
-```sh
-go run ./cmd/cocoq db --database-path /tmp/cocoq.db anthropic-usage list
 ```
 
 ## Logging

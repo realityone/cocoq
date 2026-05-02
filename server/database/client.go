@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	appconfig "github.com/realityone/cocoq/config"
 	"github.com/realityone/cocoq/server/database/dbrt"
 
 	"entgo.io/ent/dialect"
@@ -15,24 +16,36 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const defaultDatabaseDir = ".cocoq"
 const defaultDatabaseFile = "database.db"
 
 func defaultDatabasePath() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	rootDir, err := appconfig.DefaultRootDir()
 	if err != nil {
-		return "", errors.Wrap(err, "resolve home directory")
+		return "", err
 	}
-	return filepath.Join(homeDir, defaultDatabaseDir, defaultDatabaseFile), nil
+	return appconfig.FilePath(rootDir, defaultDatabaseFile), nil
 }
 
-func OpenClient(path string) (*dbrt.Client, error) {
-	var err error
-	if path == "" {
-		path, err = defaultDatabasePath()
+func resolveDatabasePath(cfg appconfig.DatabaseConfig) (string, error) {
+	rootDir := cfg.RootDir
+	if rootDir == "" {
+		var err error
+		rootDir, err = appconfig.DefaultRootDir()
 		if err != nil {
-			return nil, err
+			return "", err
 		}
+	}
+	path := cfg.Path
+	if path == "" {
+		path = defaultDatabaseFile
+	}
+	return appconfig.FilePath(rootDir, path), nil
+}
+
+func OpenClient(cfg appconfig.DatabaseConfig) (*dbrt.Client, error) {
+	path, err := resolveDatabasePath(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

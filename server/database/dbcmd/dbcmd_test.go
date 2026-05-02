@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	appconfig "github.com/realityone/cocoq/config"
 	"github.com/realityone/cocoq/server/database"
 
 	"github.com/spf13/cobra"
@@ -41,7 +42,10 @@ func executeDBCommand(t *testing.T, dbPath string, args ...string) string {
 	t.Helper()
 
 	root := &cobra.Command{Use: "db"}
-	Register(root, &dbPath)
+	databaseConfig := appconfig.DatabaseConfig{Path: dbPath}
+	Register(root, func() (appconfig.DatabaseConfig, error) {
+		return databaseConfig, nil
+	})
 	root.SetArgs(args)
 
 	var out bytes.Buffer
@@ -57,7 +61,7 @@ func executeDBCommand(t *testing.T, dbPath string, args ...string) string {
 func seedAnthropicUsage(t *testing.T, dbPath string) int {
 	t.Helper()
 
-	client, err := database.OpenClient(dbPath)
+	client, err := database.OpenClient(appconfig.DatabaseConfig{Path: dbPath})
 	if err != nil {
 		t.Fatalf("OpenClient() error = %v", err)
 	}
@@ -86,7 +90,7 @@ func seedAnthropicUsage(t *testing.T, dbPath string) int {
 func assertAnthropicUsageCount(t *testing.T, dbPath string, want int) {
 	t.Helper()
 
-	client, err := database.OpenClient(dbPath)
+	client, err := database.OpenClient(appconfig.DatabaseConfig{Path: dbPath})
 	if err != nil {
 		t.Fatalf("OpenClient() error = %v", err)
 	}

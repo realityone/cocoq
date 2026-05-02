@@ -7,17 +7,20 @@ import (
 	"text/tabwriter"
 	"time"
 
+	appconfig "github.com/realityone/cocoq/config"
 	"github.com/realityone/cocoq/server/database"
 	"github.com/realityone/cocoq/server/database/dbrt"
 
 	"github.com/spf13/cobra"
 )
 
-func Register(dbCmd *cobra.Command, databasePath *string) {
-	dbCmd.AddCommand(newAnthropicUsageDBCmd(databasePath))
+type DatabaseConfigFunc func() (appconfig.DatabaseConfig, error)
+
+func Register(dbCmd *cobra.Command, databaseConfig DatabaseConfigFunc) {
+	dbCmd.AddCommand(newAnthropicUsageDBCmd(databaseConfig))
 }
 
-func newAnthropicUsageDBCmd(databasePath *string) *cobra.Command {
+func newAnthropicUsageDBCmd(databaseConfig DatabaseConfigFunc) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "anthropic-usage",
 		Aliases: []string{"anthropic_usage", "anthropicusage"},
@@ -25,13 +28,25 @@ func newAnthropicUsageDBCmd(databasePath *string) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newDBListCmd("list Anthropic usage records", func(cmd *cobra.Command) error {
-			return runAnthropicUsageList(cmd, databasePath)
+			cfg, err := databaseConfig()
+			if err != nil {
+				return err
+			}
+			return runAnthropicUsageList(cmd, cfg)
 		}),
 		newDBGetCmd("get Anthropic usage record", func(cmd *cobra.Command, id int) error {
-			return runAnthropicUsageGet(cmd, databasePath, id)
+			cfg, err := databaseConfig()
+			if err != nil {
+				return err
+			}
+			return runAnthropicUsageGet(cmd, cfg, id)
 		}),
 		newDBDeleteCmd("delete Anthropic usage record", func(cmd *cobra.Command, id int) error {
-			return runAnthropicUsageDelete(cmd, databasePath, id)
+			cfg, err := databaseConfig()
+			if err != nil {
+				return err
+			}
+			return runAnthropicUsageDelete(cmd, cfg, id)
 		}),
 	)
 	return cmd
@@ -78,8 +93,8 @@ func newDBDeleteCmd(short string, run func(cmd *cobra.Command, id int) error) *c
 	}
 }
 
-func runAnthropicUsageList(cmd *cobra.Command, databasePath *string) error {
-	return withClient(databasePath, func(ctx context.Context, client *dbrt.Client) error {
+func runAnthropicUsageList(cmd *cobra.Command, cfg appconfig.DatabaseConfig) error {
+	return withClient(cfg, func(ctx context.Context, client *dbrt.Client) error {
 		records, err := client.AnthropicUsage.Query().All(ctx)
 		if err != nil {
 			return err
@@ -89,8 +104,8 @@ func runAnthropicUsageList(cmd *cobra.Command, databasePath *string) error {
 	})
 }
 
-func runAnthropicUsageGet(cmd *cobra.Command, databasePath *string, id int) error {
-	return withClient(databasePath, func(ctx context.Context, client *dbrt.Client) error {
+func runAnthropicUsageGet(cmd *cobra.Command, cfg appconfig.DatabaseConfig, id int) error {
+	return withClient(cfg, func(ctx context.Context, client *dbrt.Client) error {
 		record, err := client.AnthropicUsage.Get(ctx, id)
 		if err != nil {
 			return err
@@ -100,14 +115,14 @@ func runAnthropicUsageGet(cmd *cobra.Command, databasePath *string, id int) erro
 	})
 }
 
-func runAnthropicUsageDelete(cmd *cobra.Command, databasePath *string, id int) error {
-	return withClient(databasePath, func(ctx context.Context, client *dbrt.Client) error {
+func runAnthropicUsageDelete(_ *cobra.Command, cfg appconfig.DatabaseConfig, id int) error {
+	return withClient(cfg, func(ctx context.Context, client *dbrt.Client) error {
 		return client.AnthropicUsage.DeleteOneID(id).Exec(ctx)
 	})
 }
 
-func withClient(databasePath *string, run func(context.Context, *dbrt.Client) error) error {
-	client, err := database.OpenClient(*databasePath)
+func withClient(cfg appconfig.DatabaseConfig, run func(context.Context, *dbrt.Client) error) error {
+	client, err := database.OpenClient(cfg)
 	if err != nil {
 		return err
 	}
