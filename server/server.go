@@ -15,7 +15,6 @@ import (
 	"github.com/elazarl/goproxy"
 	"github.com/elazarl/goproxy/ext/har"
 	"github.com/pkg/errors"
-	utls "github.com/refraction-networking/utls"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -25,8 +24,6 @@ const (
 	caCertFile   = "ca.crt"
 	caKeyFile    = "ca.key"
 )
-
-var defaultUpstreamTLSClientHelloID = utls.HelloChrome_Auto
 
 type Config struct {
 	Addr         string
@@ -65,7 +62,6 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	server := goproxy.NewProxyHttpServer()
-	configureUpstreamTLS(server)
 	server.Verbose = cfg.Verbose
 	server.Logger = &proxyLogger{logger: logger}
 	proxyServices := []ProxyService{
@@ -129,11 +125,6 @@ func New(cfg Config) (*Server, error) {
 		logger: logger,
 		http:   httpServer,
 	}, nil
-}
-
-func configureUpstreamTLS(server *goproxy.ProxyHttpServer) {
-	server.UpstreamTLSClientHelloID = &defaultUpstreamTLSClientHelloID
-	server.ConfigureTransport()
 }
 
 func (s *Server) Run() error {
