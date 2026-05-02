@@ -101,6 +101,11 @@ func New(cfg Config) (*Server, error) {
 		server.OnResponse(proxy.DstHostInSet(proxyDomains)).DoFunc(harLogger.OnResponse)
 	}
 
+	server.OnRequest(proxy.DstHostInSet(proxyDomains)).
+		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+			logrus.WithFields(requestLogFields(req, ctx)).Info("received request")
+			return req, nil
+		})
 	// Any request that reaches this point is not handled by any proxy service, so we reject it to prevent unintended proxying.
 	server.OnRequest(goproxy.Not(proxy.DstHostInSet(proxyDomains))).
 		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
