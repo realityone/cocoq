@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/realityone/cocoq/cmd/cocoq/commands"
 	appconfig "github.com/realityone/cocoq/config"
 	"github.com/realityone/cocoq/server"
 	"github.com/realityone/cocoq/server/database"
@@ -68,6 +69,7 @@ func init() {
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(dbCmd)
 	rootCmd.AddCommand(defaultConfigCmd)
+	rootCmd.AddCommand(commands.NewClaudeCmd(loadConfig))
 }
 
 func loadConfig() (appconfig.Config, error) {

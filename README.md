@@ -50,6 +50,14 @@ Use `--config <path>` before the command to load another config file:
 go run ./cmd/cocoq --config /tmp/cocoq.yaml server run
 ```
 
+Run Claude Code with proxy environment variables resolved from config:
+
+```sh
+go run ./cmd/cocoq claude
+```
+
+The `claude` command sets `HTTP_PROXY` from `server.addr` and `NODE_EXTRA_CA_CERTS` from `server.ca.cert_file`, then replaces the current process with `claude`. The CA certificate file must already exist.
+
 The proxy creates its local CA under `global.root_dir`. Trust that CA in clients that need HTTPS MITM interception, then point the client at `127.0.0.1:8888` as its HTTP/HTTPS proxy.
 
 By default, `global.root_dir` is `$HOME/.cocoq` and runtime data is stored in `$HOME/.cocoq/database.db`. Set `database.path` in the config file to use another database for `server run` and `db` commands. Absolute file paths are used directly; relative paths are resolved under `global.root_dir`.

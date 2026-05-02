@@ -14,6 +14,12 @@ func TestRootHasConfigFlag(t *testing.T) {
 	}
 }
 
+func TestRootHasClaudeCommand(t *testing.T) {
+	if cmd, _, err := rootCmd.Find([]string{"claude"}); err != nil || cmd == nil || cmd.Name() != "claude" {
+		t.Fatalf("root command is missing claude command: cmd=%v err=%v", cmd, err)
+	}
+}
+
 func TestLoadConfigUsesConfigPath(t *testing.T) {
 	oldConfigPath := configPath
 	t.Cleanup(func() {
