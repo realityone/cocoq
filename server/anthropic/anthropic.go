@@ -135,7 +135,7 @@ func (p *anthropicProxy) handleResponse(resp *http.Response, ctx *goproxy.ProxyC
 	return proxy.HandleOnResponse(resp, ctx, p.onResponse...)
 }
 
-func (p *openrouterProxy) saveUsage(ctx context.Context, data *UserData, usage proxy.AnthropicUsage) {
+func (p *anthropicProxy) saveUsage(ctx context.Context, data *UserData, usage proxy.AnthropicUsage) {
 	record, err := p.db.AnthropicUsage.Create().
 		SetDeviceID(data.DeviceID).
 		SetSessionID(data.SessionID).
@@ -152,7 +152,7 @@ func (p *openrouterProxy) saveUsage(ctx context.Context, data *UserData, usage p
 	if err != nil {
 		logrus.WithError(err).
 			WithFields(usageLoggingFields(usage)).
-			Warn("failed to save openrouter usage")
+			Warn("failed to save anthropic usage")
 		return
 	}
 
@@ -161,7 +161,7 @@ func (p *openrouterProxy) saveUsage(ctx context.Context, data *UserData, usage p
 		"device_id":    record.DeviceID,
 		"session_id":   record.SessionID,
 		"account_uuid": record.AccountUUID,
-	}).Debug("saved openrouter usage")
+	}).Debug("saved anthropic usage")
 }
 
 func anthropicEventLoggingCondition() goproxy.ReqConditionFunc {
