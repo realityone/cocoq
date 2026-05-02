@@ -16,10 +16,16 @@ cocoq is a local HTTP MITM proxy for Claude/Anthropic traffic. It intercepts Ant
 
 ## Usage
 
+Install `cocoq` first:
+
+```sh
+go install github.com/realityone/cocoq/cmd/cocoq@main
+```
+
 Run the proxy:
 
 ```sh
-go run ./cmd/cocoq server run
+cocoq server run
 ```
 
 Configuration is loaded from `~/.cocoq/config.yaml` when that file exists:
@@ -27,7 +33,7 @@ Configuration is loaded from `~/.cocoq/config.yaml` when that file exists:
 Print a commented default config:
 
 ```sh
-go run ./cmd/cocoq default-config
+cocoq default-config
 ```
 
 ```yaml
@@ -47,13 +53,13 @@ database:
 Use `--config <path>` before the command to load another config file:
 
 ```sh
-go run ./cmd/cocoq --config /tmp/cocoq.yaml server run
+cocoq --config /tmp/cocoq.yaml server run
 ```
 
 Run Claude Code with proxy environment variables resolved from config:
 
 ```sh
-go run ./cmd/cocoq claude
+cocoq claude
 ```
 
 The `claude` command sets `HTTP_PROXY` from `server.addr` and `NODE_EXTRA_CA_CERTS` from `server.ca.cert_file`, then replaces the current process with `claude`. The CA certificate file must already exist.
@@ -73,14 +79,14 @@ OpenRouter usage is saved from both streaming SSE responses and non-streaming JS
 List saved usage records:
 
 ```sh
-go run ./cmd/cocoq db anthropic-usage list
+cocoq db anthropic-usage list
 ```
 
 Get or delete a specific usage record:
 
 ```sh
-go run ./cmd/cocoq db anthropic-usage get 1
-go run ./cmd/cocoq db anthropic-usage delete 1
+cocoq db anthropic-usage get 1
+cocoq db anthropic-usage delete 1
 ```
 
 ## Logging
