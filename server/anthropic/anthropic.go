@@ -56,36 +56,7 @@ func (p *anthropicProxy) Install(server *goproxy.ProxyHttpServer) {
 	server.OnRequest(proxy.DstHostInSet(p.Domains())).HandleConnect(proxy.NewMitmConnectAction(p.ca))
 
 	// Reject event logging requests
-	server.OnRequest(anthropicEventLoggingCondition()).
-		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			response := `{"accepted_count": 0, "rejected_count": 0}`
-			reqBody, err := io.ReadAll(req.Body)
-			if err != nil {
-				logrus.WithError(err).Warn("failed to read anthropic request body for event logging")
-				return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
-			}
-			defer req.Body.Close()
-
-			events := gjson.GetBytes(reqBody, "events")
-			if !events.IsArray() {
-				logrus.Warn("anthropic event logging request body does not contain events array")
-				return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
-			}
-			logrus.WithFields(logrus.Fields{
-				"session":     ctx.Session,
-				"service":     "anthropic",
-				"host":        req.Host,
-				"url":         req.URL.String(),
-				"method":      req.Method,
-				"event_count": len(events.Array()),
-			}).Info("response a fake anthropic event logging request")
-			response1, err := sjson.Set(response, "accepted_count", len(events.Array()))
-			if err != nil {
-				logrus.WithError(err).Warn("failed to set accepted_count in anthropic event logging response")
-				return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
-			}
-			return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response1)
-		})
+	server.OnRequest(anthropicEventLoggingCondition()).DoFunc(p.handleEventLogging)
 	// Handle /v1/messages API requests
 	server.OnRequest(anthropicV1MessagesCondition()).DoFunc(p.handleRequest)
 	server.OnResponse(anthropicV1MessagesCondition()).DoFunc(p.handleResponse)
@@ -117,6 +88,36 @@ func (data *UserData) cancelSession() {
 	if data.sessionCancel != nil {
 		data.sessionCancel()
 	}
+}
+
+func (p *anthropicProxy) handleEventLogging(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+	response := `{"accepted_count": 0, "rejected_count": 0}`
+	reqBody, err := io.ReadAll(req.Body)
+	if err != nil {
+		logrus.WithError(err).Warn("failed to read anthropic request body for event logging")
+		return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
+	}
+	defer req.Body.Close()
+
+	events := gjson.GetBytes(reqBody, "events")
+	if !events.IsArray() {
+		logrus.Warn("anthropic event logging request body does not contain events array")
+		return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
+	}
+	logrus.WithFields(logrus.Fields{
+		"session":     ctx.Session,
+		"service":     "anthropic",
+		"host":        req.Host,
+		"url":         req.URL.String(),
+		"method":      req.Method,
+		"event_count": len(events.Array()),
+	}).Info("response a fake anthropic event logging request")
+	response1, err := sjson.Set(response, "accepted_count", len(events.Array()))
+	if err != nil {
+		logrus.WithError(err).Warn("failed to set accepted_count in anthropic event logging response")
+		return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response)
+	}
+	return req, goproxy.NewResponse(req, "application/json", http.StatusOK, response1)
 }
 
 func (p *anthropicProxy) prelude(ctx *proxy.OnContext[proxy.ReqCtx]) {

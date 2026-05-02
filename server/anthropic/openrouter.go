@@ -51,18 +51,7 @@ func (p *openrouterProxy) Install(server *goproxy.ProxyHttpServer) {
 	server.OnRequest(proxy.DstHostInSet(p.Domains())).HandleConnect(proxy.NewMitmConnectAction(p.ca))
 
 	// Reject event logging requests
-	server.OnRequest(anthropicEventLoggingCondition()).
-		DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			logrus.WithFields(logrus.Fields{
-				"session":    ctx.Session,
-				"service":    "anthropic",
-				"host":       req.Host,
-				"url":        req.URL.String(),
-				"method":     req.Method,
-				"user_agent": req.UserAgent(),
-			}).Info("rejected anthropic event logging request")
-			return req, goproxy.NewResponse(req, "application/json", http.StatusNotFound, http.StatusText(http.StatusNotFound))
-		})
+	server.OnRequest(anthropicEventLoggingCondition()).DoFunc(p.handleEventLogging)
 	// Handle /v1/messages API requests
 	server.OnRequest(openRouterV1MessagesCondition()).DoFunc(p.handleRequest)
 	server.OnResponse(openRouterV1MessagesCondition()).DoFunc(p.handleResponse)
