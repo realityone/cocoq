@@ -111,7 +111,7 @@ func (p *anthropicProxy) handleEventLogging(req *http.Request, ctx *goproxy.Prox
 		"url":         req.URL.String(),
 		"method":      req.Method,
 		"event_count": len(events.Array()),
-	}).Info("response a fake anthropic event logging request")
+	}).Info("sent synthetic Anthropic event logging response")
 	response1, err := sjson.Set(response, "accepted_count", len(events.Array()))
 	if err != nil {
 		logrus.WithError(err).Warn("failed to set accepted_count in anthropic event logging response")
