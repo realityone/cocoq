@@ -76,12 +76,12 @@ func TestOpenrouterExtractUsageFromNonStreamResponse(t *testing.T) {
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
 		Opaque: proxy.RespCtx{
-			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{}},
+			ProxyCtx: newOpenrouterProxyCtx(t, &UserData{}),
 			Response: resp,
 		},
 	}
 
-	(&openrouterProxy{db: client}).extactUsage(ctx)
+	newOpenrouterTestProxy(client).extactUsage(ctx)
 
 	usage := waitForUsage(t, ctx)
 	if usage.InputTokens != 3 {
@@ -126,16 +126,16 @@ func TestOpenrouterExtractUsageSavesNonStreamUsage(t *testing.T) {
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
 		Opaque: proxy.RespCtx{
-			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{
+			ProxyCtx: newOpenrouterProxyCtx(t, &UserData{
 				DeviceID:    "device-1",
 				SessionID:   "session-1",
 				AccountUUID: "account-1",
-			}},
+			}),
 			Response: resp,
 		},
 	}
 
-	(&openrouterProxy{db: client}).extactUsage(ctx)
+	newOpenrouterTestProxy(client).extactUsage(ctx)
 
 	record := waitForUsageRecord(t, client)
 	if record.DeviceID != "device-1" {
@@ -181,12 +181,12 @@ func TestOpenrouterExtractUsageTreatsCacheCreationAs1h(t *testing.T) {
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
 		Opaque: proxy.RespCtx{
-			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{}},
+			ProxyCtx: newOpenrouterProxyCtx(t, &UserData{}),
 			Response: resp,
 		},
 	}
 
-	(&openrouterProxy{db: client}).extactUsage(ctx)
+	newOpenrouterTestProxy(client).extactUsage(ctx)
 
 	usage := waitForUsage(t, ctx)
 	if usage.InputTokens != 4 {
@@ -231,18 +231,18 @@ func TestOpenrouterExtractUsageFromStreamResponse(t *testing.T) {
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
 		Opaque: proxy.RespCtx{
-			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{
+			ProxyCtx: newOpenrouterProxyCtx(t, &UserData{
 				DeviceID:    "device-2",
 				SessionID:   "session-2",
 				AccountUUID: "account-2",
 				Model:       "claude-sonnet-4-6",
 				Stream:      true,
-			}},
+			}),
 			Response: resp,
 		},
 	}
 
-	(&openrouterProxy{db: client}).extactUsage(ctx)
+	newOpenrouterTestProxy(client).extactUsage(ctx)
 
 	if ctx.Opaque.Metrics.Model != "claude-sonnet-4-6" {
 		t.Fatalf("Metrics.Model = %q, want claude-sonnet-4-6", ctx.Opaque.Metrics.Model)
@@ -305,17 +305,17 @@ func TestOpenrouterExtractUsageFromStreamResponseSavesEveryUsage(t *testing.T) {
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
 		Opaque: proxy.RespCtx{
-			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{
+			ProxyCtx: newOpenrouterProxyCtx(t, &UserData{
 				DeviceID:    "device-3",
 				SessionID:   "session-3",
 				AccountUUID: "account-3",
 				Stream:      true,
-			}},
+			}),
 			Response: resp,
 		},
 	}
 
-	(&openrouterProxy{db: client}).extactUsage(ctx)
+	newOpenrouterTestProxy(client).extactUsage(ctx)
 	if restored := readResponseBody(t, resp); restored != body {
 		t.Fatalf("body = %s, want %s", restored, body)
 	}
@@ -374,12 +374,12 @@ func TestOpenrouterExtractUsageSkipsStreamResponseWithoutUsage(t *testing.T) {
 	resp := newOpenrouterResponse(body)
 	ctx := &proxy.OnContext[proxy.RespCtx]{
 		Opaque: proxy.RespCtx{
-			ProxyCtx: &goproxy.ProxyCtx{UserData: &UserData{Stream: true}},
+			ProxyCtx: newOpenrouterProxyCtx(t, &UserData{Stream: true}),
 			Response: resp,
 		},
 	}
 
-	(&openrouterProxy{db: client}).extactUsage(ctx)
+	newOpenrouterTestProxy(client).extactUsage(ctx)
 
 	if len(ctx.Opaque.Metrics.Usage.GetRaw()) != 0 {
 		t.Fatal("usage was parsed for stream response")
@@ -395,6 +395,21 @@ func newOpenrouterResponse(body string) *http.Response {
 		Body:          io.NopCloser(strings.NewReader(body)),
 		ContentLength: int64(len(body)),
 		Header:        make(http.Header),
+	}
+}
+
+func newOpenrouterTestProxy(client *dbrt.Client) *openrouterProxy {
+	return &openrouterProxy{
+		anthropicProxy: &anthropicProxy{db: client},
+	}
+}
+
+func newOpenrouterProxyCtx(t *testing.T, data *UserData) *goproxy.ProxyCtx {
+	t.Helper()
+
+	return &goproxy.ProxyCtx{
+		Req:      newAnthropicMessagesRequest(t, "{}"),
+		UserData: data,
 	}
 }
 

@@ -1,12 +1,14 @@
 package anthropic
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/realityone/cocoq/server/database/dbrt"
 	"github.com/realityone/cocoq/server/proxy"
 
 	"github.com/elazarl/goproxy"
@@ -24,14 +26,16 @@ var anthropicProxyDomains = sets.New(
 
 type anthropicProxy struct {
 	ca tls.Certificate
+	db *dbrt.Client
 
 	onRequest  []proxy.Handler[proxy.ReqCtx]
 	onResponse []proxy.Handler[proxy.RespCtx]
 }
 
-func NewAnthropicProxy(ca tls.Certificate) *anthropicProxy {
+func NewAnthropicProxy(ca tls.Certificate, db *dbrt.Client) *anthropicProxy {
 	p := &anthropicProxy{
 		ca: ca,
+		db: db,
 	}
 	p.onRequest = append(
 		p.onRequest,
@@ -129,6 +133,35 @@ func (p *anthropicProxy) handleRequest(req *http.Request, ctx *goproxy.ProxyCtx)
 
 func (p *anthropicProxy) handleResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 	return proxy.HandleOnResponse(resp, ctx, p.onResponse...)
+}
+
+func (p *openrouterProxy) saveUsage(ctx context.Context, data *UserData, usage proxy.AnthropicUsage) {
+	record, err := p.db.AnthropicUsage.Create().
+		SetDeviceID(data.DeviceID).
+		SetSessionID(data.SessionID).
+		SetAccountUUID(data.AccountUUID).
+		SetInputTokens(usage.InputTokens).
+		SetCacheReadInputTokens(usage.CacheReadInputTokens).
+		SetCacheCreationInputTokens(usage.CacheCreationInputTokens).
+		SetOutputTokens(usage.OutputTokens).
+		SetCacheCreationEphemeral5mInputTokens(usage.CacheCreation.Ephemeral5mInputTokens).
+		SetCacheCreationEphemeral1hInputTokens(usage.CacheCreation.Ephemeral1hInputTokens).
+		SetCacheHitRate(usage.CacheHitRate()).
+		SetRaw(usage.RawString()).
+		Save(ctx)
+	if err != nil {
+		logrus.WithError(err).
+			WithFields(p.usageFields(usage)).
+			Warn("failed to save openrouter usage")
+		return
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"id":           record.ID,
+		"device_id":    record.DeviceID,
+		"session_id":   record.SessionID,
+		"account_uuid": record.AccountUUID,
+	}).Debug("saved openrouter usage")
 }
 
 func anthropicEventLoggingCondition() goproxy.ReqConditionFunc {

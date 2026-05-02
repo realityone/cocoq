@@ -92,7 +92,7 @@ func TestHandleRequestStoresRequestMetadata(t *testing.T) {
 	req := newAnthropicMessagesRequest(t, body)
 	ctx := &goproxy.ProxyCtx{}
 
-	gotReq, gotResp := NewAnthropicProxy(tls.Certificate{}).handleRequest(req, ctx)
+	gotReq, gotResp := NewAnthropicProxy(tls.Certificate{}, nil).handleRequest(req, ctx)
 	if gotResp != nil {
 		t.Fatalf("handleRequest response = %v, want nil", gotResp)
 	}

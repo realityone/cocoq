@@ -1,7 +1,6 @@
 package anthropic
 
 import (
-	"context"
 	"crypto/tls"
 	"encoding/json"
 	"io"
@@ -23,14 +22,12 @@ const defaultOpenRouterProvider = "anthropic"
 
 type openrouterProxy struct {
 	*anthropicProxy
-	db       *dbrt.Client
 	provider string
 }
 
 func NewOpenrouterProxy(ca tls.Certificate, db *dbrt.Client) *openrouterProxy {
 	p := &openrouterProxy{
-		anthropicProxy: NewAnthropicProxy(ca),
-		db:             db,
+		anthropicProxy: NewAnthropicProxy(ca, db),
 		provider:       defaultOpenRouterProvider,
 	}
 	p.onRequest = append(
@@ -176,40 +173,8 @@ func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]
 func (p *openrouterProxy) recordUsage(ctx *proxy.OnContext[proxy.RespCtx], usage proxy.AnthropicUsage) {
 	ctx.Opaque.Metrics.Usage = usage
 	userData := getUserData(ctx.Opaque.ProxyCtx)
-	p.saveUsage(userData, usage)
-}
-
-func (p *openrouterProxy) saveUsage(data *UserData, usage proxy.AnthropicUsage) {
-	if data == nil {
-		return
-	}
-
-	record, err := p.db.AnthropicUsage.Create().
-		SetDeviceID(data.DeviceID).
-		SetSessionID(data.SessionID).
-		SetAccountUUID(data.AccountUUID).
-		SetInputTokens(usage.InputTokens).
-		SetCacheReadInputTokens(usage.CacheReadInputTokens).
-		SetCacheCreationInputTokens(usage.CacheCreationInputTokens).
-		SetOutputTokens(usage.OutputTokens).
-		SetCacheCreationEphemeral5mInputTokens(usage.CacheCreation.Ephemeral5mInputTokens).
-		SetCacheCreationEphemeral1hInputTokens(usage.CacheCreation.Ephemeral1hInputTokens).
-		SetCacheHitRate(usage.CacheHitRate()).
-		SetRaw(usage.RawString()).
-		Save(context.Background())
-	if err != nil {
-		logrus.WithError(err).
-			WithFields(p.usageFields(usage)).
-			Warn("failed to save openrouter usage")
-		return
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"id":           record.ID,
-		"device_id":    record.DeviceID,
-		"session_id":   record.SessionID,
-		"account_uuid": record.AccountUUID,
-	}).Debug("saved openrouter usage")
+	reqCtx := ctx.Opaque.ProxyCtx.Req.Context()
+	p.saveUsage(reqCtx, userData, usage)
 }
 
 func (p *openrouterProxy) usageFields(usage proxy.AnthropicUsage) logrus.Fields {
