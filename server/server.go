@@ -43,6 +43,9 @@ var apiServiceFactories = map[string]apiServiceFactory{
 	appconfig.APIServiceOpenRouter: func(ca tls.Certificate, db *dbrt.Client, options json.RawMessage) (ProxyService, error) {
 		return anthropic.NewOpenrouterProxy(ca, db, options)
 	},
+	appconfig.APIServicePoe: func(ca tls.Certificate, db *dbrt.Client, options json.RawMessage) (ProxyService, error) {
+		return anthropic.NewPoeProxy(ca, db, options)
+	},
 }
 
 func New(cfg appconfig.ServerConfig, db *dbrt.Client) (*Server, error) {
@@ -138,6 +141,9 @@ func New(cfg appconfig.ServerConfig, db *dbrt.Client) (*Server, error) {
 }
 
 func newAPIServices(ca tls.Certificate, db *dbrt.Client, configs []appconfig.APIServiceConfig) ([]ProxyService, error) {
+	if err := validateAPIServiceConfigs(configs); err != nil {
+		return nil, err
+	}
 	configs = normalizeAPIServiceConfigs(configs)
 
 	services := make([]ProxyService, 0, len(configs))
@@ -156,10 +162,16 @@ func newAPIServices(ca tls.Certificate, db *dbrt.Client, configs []appconfig.API
 }
 
 func validateAPIServiceConfigs(configs []appconfig.APIServiceConfig) error {
+	seen := map[string]struct{}{}
 	for _, cfg := range normalizeAPIServiceConfigs(configs) {
-		if _, err := resolveAPIServiceFactory(cfg.Name); err != nil {
+		name := normalizeAPIServiceName(cfg.Name)
+		if _, err := resolveAPIServiceFactory(name); err != nil {
 			return err
 		}
+		if _, ok := seen[name]; ok {
+			return errors.Errorf("duplicate API service %q", name)
+		}
+		seen[name] = struct{}{}
 	}
 	return nil
 }
@@ -172,15 +184,20 @@ func normalizeAPIServiceConfigs(configs []appconfig.APIServiceConfig) []appconfi
 }
 
 func resolveAPIServiceFactory(name string) (apiServiceFactory, error) {
-	name = strings.ToLower(strings.TrimSpace(name))
-	if name == "" {
-		name = appconfig.APIServiceOpenRouter
-	}
+	name = normalizeAPIServiceName(name)
 	factory, ok := apiServiceFactories[name]
 	if !ok {
 		return nil, errors.Errorf("unsupported API service %q", name)
 	}
 	return factory, nil
+}
+
+func normalizeAPIServiceName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return appconfig.APIServiceOpenRouter
+	}
+	return name
 }
 
 func (s *Server) Run() error {

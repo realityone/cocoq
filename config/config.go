@@ -29,6 +29,7 @@ const (
 const (
 	APIServiceAnthropic  = "anthropic"
 	APIServiceOpenRouter = "openrouter"
+	APIServicePoe        = "poe"
 )
 
 type Config struct {
@@ -115,7 +116,7 @@ global:
 server:
   # HTTP listen address for the local proxy server.
   addr: %s
-  # API services to install. Supported names: "openrouter", "anthropic".
+  # API services to install. Supported names: "openrouter", "anthropic", "poe".
   api_services:
     - name: %s
       # Service-specific options. OpenRouter supports "provider".
