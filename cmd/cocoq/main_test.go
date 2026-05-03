@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,11 @@ func TestLoadConfigUsesConfigPath(t *testing.T) {
 	content := []byte(`
 server:
   addr: 127.0.0.1:9999
+  api_services:
+    - name: anthropic
+    - name: openrouter
+      options:
+        provider: openai
   har_file: /tmp/cocoq.har
   verbose: true
   ca:
@@ -49,6 +55,18 @@ database:
 
 	if cfg.Server.Addr != "127.0.0.1:9999" {
 		t.Fatalf("cfg.Server.Addr = %q, want %q", cfg.Server.Addr, "127.0.0.1:9999")
+	}
+	if len(cfg.Server.APIServices) != 2 {
+		t.Fatalf("len(cfg.Server.APIServices) = %d, want 2", len(cfg.Server.APIServices))
+	}
+	if cfg.Server.APIServices[0].Name != "anthropic" {
+		t.Fatalf("cfg.Server.APIServices[0].Name = %q, want anthropic", cfg.Server.APIServices[0].Name)
+	}
+	if cfg.Server.APIServices[1].Name != "openrouter" {
+		t.Fatalf("cfg.Server.APIServices[1].Name = %q, want openrouter", cfg.Server.APIServices[1].Name)
+	}
+	if provider := openRouterProviderFromOptions(t, cfg.Server.APIServices[1].Options); provider != "openai" {
+		t.Fatalf("cfg.Server.APIServices[1].Options.provider = %q, want openai", provider)
 	}
 	if cfg.Server.HARFile != "/tmp/cocoq.har" {
 		t.Fatalf("cfg.Server.HARFile = %q, want %q", cfg.Server.HARFile, "/tmp/cocoq.har")
@@ -119,6 +137,10 @@ func TestDefaultConfigCommand(t *testing.T) {
 		"  root_dir:",
 		"server:",
 		"  addr:",
+		"  api_services:",
+		"    - name:",
+		"      options:",
+		"        provider:",
 		"  har_file:",
 		"  verbose:",
 		"  ca:",
@@ -128,6 +150,7 @@ func TestDefaultConfigCommand(t *testing.T) {
 		"  path:",
 		"# Global settings shared by all commands.",
 		"# Proxy server settings.",
+		"# API services to install.",
 		"# Root CA files used for MITM TLS.",
 		"# Database settings.",
 		"# Root directory for runtime files.",
@@ -146,4 +169,16 @@ func TestDefaultConfigCommand(t *testing.T) {
 	if !hasActiveYAMLLine {
 		t.Fatalf("default-config output has no active YAML lines:\n%s", got)
 	}
+}
+
+func openRouterProviderFromOptions(t *testing.T, raw json.RawMessage) string {
+	t.Helper()
+
+	var options struct {
+		Provider string `json:"provider"`
+	}
+	if err := json.Unmarshal(raw, &options); err != nil {
+		t.Fatalf("unmarshal options %s: %v", raw, err)
+	}
+	return options.Provider
 }

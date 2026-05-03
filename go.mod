@@ -7,6 +7,7 @@ require (
 	github.com/elazarl/goproxy v1.8.4-0.20260429163546-e493e1c4c552
 	github.com/elazarl/goproxy/ext v0.0.0-20260327201742-eeb2adb11cb5
 	github.com/gin-contrib/sse v1.1.1
+	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.2
@@ -30,7 +31,6 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.18.1 // indirect

@@ -3,6 +3,8 @@ package anthropic
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"io"
 	"math"
 	"net/http"
@@ -58,6 +60,17 @@ func TestOpenrouterStickProviderOverwritesProviderBody(t *testing.T) {
 	assertJSONEqual(t, got, "provider.only.0", defaultOpenRouterProvider)
 	if value := gjson.GetBytes(got, "provider.allow_fallbacks"); !value.Exists() || value.Bool() {
 		t.Fatalf("provider.allow_fallbacks = %v, want false", value.Value())
+	}
+}
+
+func TestNewOpenrouterProxyParsesOptions(t *testing.T) {
+	p, err := NewOpenrouterProxy(tls.Certificate{}, nil, json.RawMessage(`{"provider":"openai"}`))
+	if err != nil {
+		t.Fatalf("NewOpenrouterProxy returned error: %v", err)
+	}
+
+	if p.provider != "openai" {
+		t.Fatalf("provider = %q, want openai", p.provider)
 	}
 }
 

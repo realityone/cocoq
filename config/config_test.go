@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,6 +57,7 @@ func TestLoadMissingFileReturnsDefault(t *testing.T) {
 	if cfg.Server.Addr != "127.0.0.1:8888" {
 		t.Fatalf("cfg.Server.Addr = %q, want %q", cfg.Server.Addr, "127.0.0.1:8888")
 	}
+	assertDefaultAPIServices(t, cfg.Server.APIServices)
 	if cfg.Server.HARFile != "" {
 		t.Fatalf("cfg.Server.HARFile = %q, want empty", cfg.Server.HARFile)
 	}
@@ -81,6 +83,11 @@ global:
   root_dir: ` + rootDir + `
 server:
   addr: 127.0.0.1:9999
+  api_services:
+    - name: anthropic
+    - name: openrouter
+      options:
+        provider: openai
   har_file: /tmp/cocoq.har
   verbose: true
   ca:
@@ -100,6 +107,18 @@ database:
 
 	if cfg.Server.Addr != "127.0.0.1:9999" {
 		t.Fatalf("cfg.Server.Addr = %q, want %q", cfg.Server.Addr, "127.0.0.1:9999")
+	}
+	if len(cfg.Server.APIServices) != 2 {
+		t.Fatalf("len(cfg.Server.APIServices) = %d, want 2", len(cfg.Server.APIServices))
+	}
+	if cfg.Server.APIServices[0].Name != APIServiceAnthropic {
+		t.Fatalf("cfg.Server.APIServices[0].Name = %q, want %q", cfg.Server.APIServices[0].Name, APIServiceAnthropic)
+	}
+	if cfg.Server.APIServices[1].Name != APIServiceOpenRouter {
+		t.Fatalf("cfg.Server.APIServices[1].Name = %q, want %q", cfg.Server.APIServices[1].Name, APIServiceOpenRouter)
+	}
+	if provider := openRouterProviderFromOptions(t, cfg.Server.APIServices[1].Options); provider != "openai" {
+		t.Fatalf("cfg.Server.APIServices[1].Options.provider = %q, want openai", provider)
 	}
 	if cfg.Global.RootDir != rootDir {
 		t.Fatalf("cfg.Global.RootDir = %q, want %q", cfg.Global.RootDir, rootDir)
@@ -145,6 +164,7 @@ server:
 	if cfg.Server.Addr != "127.0.0.1:8888" {
 		t.Fatalf("cfg.Server.Addr = %q, want %q", cfg.Server.Addr, "127.0.0.1:8888")
 	}
+	assertDefaultAPIServices(t, cfg.Server.APIServices)
 	if !cfg.Server.Verbose {
 		t.Fatal("cfg.Server.Verbose = false, want true")
 	}
@@ -169,6 +189,11 @@ func TestDefaultYAMLIncludesCommentsAndAllFields(t *testing.T) {
 		"server:",
 		"# HTTP listen address for the local proxy server.",
 		"  addr:",
+		"# API services to install.",
+		"  api_services:",
+		"    - name:",
+		"      options:",
+		"        provider:",
 		"# HAR output file path.",
 		"  har_file:",
 		"# Enable verbose proxy logging.",
@@ -215,6 +240,7 @@ func TestDefaultYAMLIncludesCommentsAndAllFields(t *testing.T) {
 	if cfg.Server.Addr != "127.0.0.1:8888" {
 		t.Fatalf("cfg.Server.Addr = %q, want %q", cfg.Server.Addr, "127.0.0.1:8888")
 	}
+	assertDefaultAPIServices(t, cfg.Server.APIServices)
 	if cfg.Server.HARFile != "" {
 		t.Fatalf("cfg.Server.HARFile = %q, want empty", cfg.Server.HARFile)
 	}
@@ -230,4 +256,30 @@ func TestDefaultYAMLIncludesCommentsAndAllFields(t *testing.T) {
 	if cfg.Database.Path != "database.db" {
 		t.Fatalf("cfg.Database.Path = %q, want %q", cfg.Database.Path, "database.db")
 	}
+}
+
+func assertDefaultAPIServices(t *testing.T, services []APIServiceConfig) {
+	t.Helper()
+
+	if len(services) != 1 {
+		t.Fatalf("len(APIServices) = %d, want 1", len(services))
+	}
+	if services[0].Name != APIServiceOpenRouter {
+		t.Fatalf("APIServices[0].Name = %q, want %q", services[0].Name, APIServiceOpenRouter)
+	}
+	if provider := openRouterProviderFromOptions(t, services[0].Options); provider != defaultOpenRouterProvider {
+		t.Fatalf("APIServices[0].Options.provider = %q, want %q", provider, defaultOpenRouterProvider)
+	}
+}
+
+func openRouterProviderFromOptions(t *testing.T, raw json.RawMessage) string {
+	t.Helper()
+
+	var options struct {
+		Provider string `json:"provider"`
+	}
+	if err := json.Unmarshal(raw, &options); err != nil {
+		t.Fatalf("unmarshal options %s: %v", raw, err)
+	}
+	return options.Provider
 }

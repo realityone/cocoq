@@ -34,7 +34,7 @@ type anthropicProxy struct {
 	onResponse []proxy.Handler[proxy.RespCtx]
 }
 
-func NewAnthropicProxy(ca tls.Certificate, db *dbrt.Client) *anthropicProxy {
+func NewAnthropicProxy(ca tls.Certificate, db *dbrt.Client, options json.RawMessage) *anthropicProxy {
 	p := &anthropicProxy{
 		ca: ca,
 		db: db,

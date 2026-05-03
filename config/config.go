@@ -1,24 +1,34 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/go-viper/mapstructure/v2"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
 
 const (
-	defaultDirName    = ".cocoq"
-	defaultFileName   = "config.yaml"
-	defaultAddr       = "127.0.0.1:8888"
-	defaultDatabase   = "database.db"
-	defaultCACertFile = "ca.crt"
-	defaultCAKeyFile  = "ca.key"
+	defaultDirName            = ".cocoq"
+	defaultFileName           = "config.yaml"
+	defaultAddr               = "127.0.0.1:8888"
+	defaultDatabase           = "database.db"
+	defaultCACertFile         = "ca.crt"
+	defaultCAKeyFile          = "ca.key"
+	defaultOpenRouterProvider = "anthropic"
+	defaultAPIService         = APIServiceOpenRouter
+)
+
+const (
+	APIServiceAnthropic  = "anthropic"
+	APIServiceOpenRouter = "openrouter"
 )
 
 type Config struct {
@@ -32,11 +42,17 @@ type GlobalConfig struct {
 }
 
 type ServerConfig struct {
-	RootDir string   `mapstructure:"-" yaml:"-"`
-	Addr    string   `mapstructure:"addr" yaml:"addr"`
-	HARFile string   `mapstructure:"har_file" yaml:"har_file"`
-	Verbose bool     `mapstructure:"verbose" yaml:"verbose"`
-	CA      CAConfig `mapstructure:"ca" yaml:"ca"`
+	RootDir     string             `mapstructure:"-" yaml:"-"`
+	Addr        string             `mapstructure:"addr" yaml:"addr"`
+	APIServices []APIServiceConfig `mapstructure:"api_services" yaml:"api_services"`
+	HARFile     string             `mapstructure:"har_file" yaml:"har_file"`
+	Verbose     bool               `mapstructure:"verbose" yaml:"verbose"`
+	CA          CAConfig           `mapstructure:"ca" yaml:"ca"`
+}
+
+type APIServiceConfig struct {
+	Name    string          `mapstructure:"name" yaml:"name"`
+	Options json.RawMessage `mapstructure:"options" yaml:"options,omitempty"`
 }
 
 type DatabaseConfig struct {
@@ -56,8 +72,9 @@ func Default() Config {
 			RootDir: rootDir,
 		},
 		Server: ServerConfig{
-			RootDir: rootDir,
-			Addr:    defaultAddr,
+			RootDir:     rootDir,
+			Addr:        defaultAddr,
+			APIServices: defaultAPIServices(),
 			CA: CAConfig{
 				CertFile: defaultCACertFile,
 				KeyFile:  defaultCAKeyFile,
@@ -70,8 +87,24 @@ func Default() Config {
 	}
 }
 
+func defaultAPIServices() []APIServiceConfig {
+	options := struct {
+		Provider string `json:"provider"`
+	}{
+		Provider: defaultOpenRouterProvider,
+	}
+	raw, _ := json.Marshal(options)
+	return []APIServiceConfig{
+		{
+			Name:    APIServiceOpenRouter,
+			Options: json.RawMessage(raw),
+		},
+	}
+}
+
 func DefaultYAML() string {
 	cfg := Default()
+	defaultService := cfg.Server.APIServices[0]
 	return fmt.Sprintf(`# Default cocoq configuration.
 # Global settings shared by all commands.
 global:
@@ -82,6 +115,12 @@ global:
 server:
   # HTTP listen address for the local proxy server.
   addr: %s
+  # API services to install. Supported names: "openrouter", "anthropic".
+  api_services:
+    - name: %s
+      # Service-specific options. OpenRouter supports "provider".
+      options:
+        provider: %s
   # HAR output file path. Empty disables HAR export.
   har_file: %s
   # Enable verbose proxy logging.
@@ -99,6 +138,8 @@ database:
   path: %s
 `, yamlString(cfg.Global.RootDir),
 		yamlString(cfg.Server.Addr),
+		yamlString(defaultService.Name),
+		yamlString(defaultOpenRouterProvider),
 		yamlString(cfg.Server.HARFile),
 		cfg.Server.Verbose,
 		yamlString(cfg.Server.CA.CertFile),
@@ -149,7 +190,7 @@ func Load(path string) (Config, error) {
 	}
 
 	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
+	if err := v.Unmarshal(&cfg, viper.DecodeHook(rawMessageDecodeHook())); err != nil {
 		return Config{}, pkgerrors.Wrapf(err, "parse config file %q", configPath)
 	}
 	applyDerivedFields(&cfg)
@@ -176,11 +217,41 @@ func setDefaults(v *viper.Viper) {
 	cfg := Default()
 	v.SetDefault("global.root_dir", cfg.Global.RootDir)
 	v.SetDefault("server.addr", cfg.Server.Addr)
+	v.SetDefault("server.api_services", cfg.Server.APIServices)
 	v.SetDefault("server.har_file", cfg.Server.HARFile)
 	v.SetDefault("server.verbose", cfg.Server.Verbose)
 	v.SetDefault("database.path", cfg.Database.Path)
 	v.SetDefault("server.ca.cert_file", cfg.Server.CA.CertFile)
 	v.SetDefault("server.ca.key_file", cfg.Server.CA.KeyFile)
+}
+
+func rawMessageDecodeHook() mapstructure.DecodeHookFunc {
+	rawMessageType := reflect.TypeOf(json.RawMessage{})
+	return func(from reflect.Type, to reflect.Type, data any) (any, error) {
+		if to != rawMessageType {
+			return data, nil
+		}
+		switch value := data.(type) {
+		case nil:
+			return nil, nil
+		case json.RawMessage:
+			return value, nil
+		case []byte:
+			return json.RawMessage(value), nil
+		case string:
+			if value == "" {
+				return json.RawMessage(nil), nil
+			}
+			if json.Valid([]byte(value)) {
+				return json.RawMessage(value), nil
+			}
+		}
+		raw, err := json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+		return json.RawMessage(raw), nil
+	}
 }
 
 func applyDerivedFields(cfg *Config) {

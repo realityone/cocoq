@@ -3,6 +3,7 @@ package anthropic
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -23,10 +24,28 @@ type openrouterProxy struct {
 	provider string
 }
 
-func NewOpenrouterProxy(ca tls.Certificate, db *dbrt.Client) *openrouterProxy {
+type OpenrouterOptions struct {
+	Provider string
+}
+
+func NewOpenrouterProxy(ca tls.Certificate, db *dbrt.Client, options json.RawMessage) (*openrouterProxy, error) {
+	var opts OpenrouterOptions
+	if len(options) > 0 {
+		if err := json.Unmarshal(options, &opts); err != nil {
+			return nil, fmt.Errorf("decode openrouter API service options: %w", err)
+		}
+	}
+	return newOpenrouterProxyWithOptions(ca, db, opts), nil
+}
+
+func newOpenrouterProxyWithOptions(ca tls.Certificate, db *dbrt.Client, opts OpenrouterOptions) *openrouterProxy {
+	provider := opts.Provider
+	if provider == "" {
+		provider = defaultOpenRouterProvider
+	}
 	p := &openrouterProxy{
-		anthropicProxy: NewAnthropicProxy(ca, db),
-		provider:       defaultOpenRouterProvider,
+		anthropicProxy: NewAnthropicProxy(ca, db, nil),
+		provider:       provider,
 	}
 	p.onRequest = append(
 		p.onRequest,

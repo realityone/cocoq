@@ -41,6 +41,10 @@ global:
   root_dir: /Users/you/.cocoq
 server:
   addr: 127.0.0.1:8888
+  api_services:
+    - name: openrouter
+      options:
+        provider: anthropic
   har_file: /tmp/cocoq.har
   verbose: false
   ca:
@@ -67,6 +71,8 @@ The `claude` command sets `HTTP_PROXY` from `server.addr` and `NODE_EXTRA_CA_CER
 The proxy creates its local CA under `global.root_dir`. Trust that CA in clients that need HTTPS MITM interception, then point the client at `127.0.0.1:8888` as its HTTP/HTTPS proxy.
 
 By default, `global.root_dir` is `$HOME/.cocoq` and runtime data is stored in `$HOME/.cocoq/database.db`. Set `database.path` in the config file to use another database for `server run` and `db` commands. Absolute file paths are used directly; relative paths are resolved under `global.root_dir`.
+
+Set `server.api_services` to choose which Anthropic-compatible API service implementations the proxy installs. Supported service names are `openrouter` and `anthropic`; the default installs `openrouter`. Service-specific settings live under `options`; OpenRouter supports `options.provider` to force a provider.
 
 ## Usage Records
 

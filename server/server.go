@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	appconfig "github.com/realityone/cocoq/config"
@@ -32,9 +34,23 @@ type ProxyService interface {
 	Install(*goproxy.ProxyHttpServer)
 }
 
+type apiServiceFactory func(tls.Certificate, *dbrt.Client, json.RawMessage) (ProxyService, error)
+
+var apiServiceFactories = map[string]apiServiceFactory{
+	appconfig.APIServiceAnthropic: func(ca tls.Certificate, db *dbrt.Client, options json.RawMessage) (ProxyService, error) {
+		return anthropic.NewAnthropicProxy(ca, db, options), nil
+	},
+	appconfig.APIServiceOpenRouter: func(ca tls.Certificate, db *dbrt.Client, options json.RawMessage) (ProxyService, error) {
+		return anthropic.NewOpenrouterProxy(ca, db, options)
+	},
+}
+
 func New(cfg appconfig.ServerConfig, db *dbrt.Client) (*Server, error) {
 	if db == nil {
 		return nil, errors.New("database client is required")
+	}
+	if err := validateAPIServiceConfigs(cfg.APIServices); err != nil {
+		return nil, err
 	}
 
 	logger := logrus.New()
@@ -47,10 +63,11 @@ func New(cfg appconfig.ServerConfig, db *dbrt.Client) (*Server, error) {
 	server := goproxy.NewProxyHttpServer()
 	server.Verbose = cfg.Verbose
 	server.Logger = &proxyLogger{logger: logger}
-	proxyServices := []ProxyService{
-		anthropic.NewOpenrouterProxy(ca, db),
-		newExampleProxy(ca),
+	proxyServices, err := newAPIServices(ca, db, cfg.APIServices)
+	if err != nil {
+		return nil, err
 	}
+	proxyServices = append(proxyServices, newExampleProxy(ca))
 	proxyDomains := sets.New[string]()
 	for _, ps := range proxyServices {
 		proxyDomains = proxyDomains.Union(ps.Domains())
@@ -118,6 +135,52 @@ func New(cfg appconfig.ServerConfig, db *dbrt.Client) (*Server, error) {
 		logger: logger,
 		http:   httpServer,
 	}, nil
+}
+
+func newAPIServices(ca tls.Certificate, db *dbrt.Client, configs []appconfig.APIServiceConfig) ([]ProxyService, error) {
+	configs = normalizeAPIServiceConfigs(configs)
+
+	services := make([]ProxyService, 0, len(configs))
+	for _, cfg := range configs {
+		factory, err := resolveAPIServiceFactory(cfg.Name)
+		if err != nil {
+			return nil, err
+		}
+		service, err := factory(ca, db, cfg.Options)
+		if err != nil {
+			return nil, err
+		}
+		services = append(services, service)
+	}
+	return services, nil
+}
+
+func validateAPIServiceConfigs(configs []appconfig.APIServiceConfig) error {
+	for _, cfg := range normalizeAPIServiceConfigs(configs) {
+		if _, err := resolveAPIServiceFactory(cfg.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func normalizeAPIServiceConfigs(configs []appconfig.APIServiceConfig) []appconfig.APIServiceConfig {
+	if len(configs) > 0 {
+		return configs
+	}
+	return []appconfig.APIServiceConfig{{Name: appconfig.APIServiceOpenRouter}}
+}
+
+func resolveAPIServiceFactory(name string) (apiServiceFactory, error) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		name = appconfig.APIServiceOpenRouter
+	}
+	factory, ok := apiServiceFactories[name]
+	if !ok {
+		return nil, errors.Errorf("unsupported API service %q", name)
+	}
+	return factory, nil
 }
 
 func (s *Server) Run() error {
