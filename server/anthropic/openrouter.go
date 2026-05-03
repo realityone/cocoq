@@ -9,11 +9,9 @@ import (
 
 	"github.com/realityone/cocoq/server/database/dbrt"
 	"github.com/realityone/cocoq/server/proxy"
-	"github.com/realityone/cocoq/server/sse"
 
 	"github.com/elazarl/goproxy"
 	"github.com/sirupsen/logrus"
-	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -101,96 +99,6 @@ func (p *openrouterProxy) stickProviderInBody(body []byte) ([]byte, bool, error)
 		return nil, false, err
 	}
 	return nextBody, true, nil
-}
-
-func (p *openrouterProxy) extactUsage(ctx *proxy.OnContext[proxy.RespCtx]) {
-	data := getUserData(ctx.Opaque.ProxyCtx)
-	ctx.Opaque.Metrics.Model = data.Model
-
-	if data.Stream {
-		p.extactUsageFromSSE(ctx)
-		return
-	}
-	p.extactUsageFromBody(ctx)
-}
-
-func (p *openrouterProxy) extactUsageFromBody(ctx *proxy.OnContext[proxy.RespCtx]) {
-	resp := ctx.Opaque.Response
-	if resp.Body == nil {
-		return
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		logrus.WithError(err).Warn("failed to read openrouter response body for usage")
-		return
-	}
-	defer resp.Body.Close()
-	proxy.ReplaceResponseBody(resp, body)
-	ctx.Opaque.PostResponse = resp
-
-	usage, ok := p.parseUsage(body)
-	if !ok {
-		logrus.Warn("failed to parse usage from openrouter response body")
-		return
-	}
-	p.recordUsage(ctx, usage)
-}
-
-func (p *openrouterProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]) {
-	resp := ctx.Opaque.Response
-	events := sse.Forward(resp)
-	userData := getUserData(ctx.Opaque.ProxyCtx)
-
-	go func() {
-		defer userData.cancelSession()
-		for event := range events {
-			data, ok := event.Data.(string)
-			if !ok || !gjson.Get(data, "usage").Exists() {
-				continue
-			}
-			usage, ok := p.parseUsage([]byte(data))
-			if !ok {
-				continue
-			}
-			p.recordUsage(ctx, usage)
-			logrus.WithField("model", ctx.Opaque.Metrics.Model).
-				WithFields(usageLoggingFields(usage)).
-				Info("extracted usage from openrouter SSE response")
-		}
-	}()
-	ctx.Opaque.PostResponse = resp
-}
-
-func (p *openrouterProxy) recordUsage(ctx *proxy.OnContext[proxy.RespCtx], usage proxy.AnthropicUsage) {
-	ctx.Opaque.Metrics.Usage = usage
-	userData := getUserData(ctx.Opaque.ProxyCtx)
-	p.saveUsage(userData, usage)
-}
-
-func (p *openrouterProxy) parseUsage(body []byte) (proxy.AnthropicUsage, bool) {
-	usageData := gjson.GetBytes(body, "usage")
-	if !usageData.Exists() {
-		logrus.Warn("usage data not found in openrouter response body")
-		return proxy.AnthropicUsage{}, false
-	}
-	inputTokens := usageData.Get("input_tokens").Int()
-	outputTokens := usageData.Get("output_tokens").Int()
-	if inputTokens == 0 && outputTokens == 0 {
-		logrus.Warn("input and output tokens are both zero in response usage data, skipping usage recording")
-		return proxy.AnthropicUsage{}, false
-	}
-	usage := proxy.AnthropicUsage{
-		InputTokens:              inputTokens,
-		OutputTokens:             outputTokens,
-		CacheReadInputTokens:     usageData.Get("cache_read_input_tokens").Int(),
-		CacheCreationInputTokens: usageData.Get("cache_creation_input_tokens").Int(),
-	}
-	// Assume cache creation input tokens are 1h TTL tokens because OpenRouter
-	// does not provide a reliable cache creation breakdown.
-	usage.CacheCreation.Ephemeral1hInputTokens = usage.CacheCreationInputTokens
-	usage.SetRaw(json.RawMessage(usageData.Raw))
-	return usage, true
 }
 
 func openRouterV1MessagesCondition() goproxy.ReqConditionFunc {

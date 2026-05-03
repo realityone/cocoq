@@ -169,13 +169,13 @@ func TestOpenrouterExtractUsageSavesNonStreamUsage(t *testing.T) {
 	}
 }
 
-func TestOpenrouterExtractUsageTreatsCacheCreationAs1h(t *testing.T) {
+func TestOpenrouterExtractUsageUsesCacheCreationBreakdown(t *testing.T) {
 	client := newOpenrouterTestDB(t)
 	body := `{
 		"usage": {
 			"input_tokens": 4,
 			"output_tokens": 8,
-			"cache_creation_input_tokens": 12,
+			"cache_creation_input_tokens": 44,
 			"cache_read_input_tokens": 16,
 			"cache_creation": {
 				"ephemeral_5m_input_tokens": 20,
@@ -200,17 +200,17 @@ func TestOpenrouterExtractUsageTreatsCacheCreationAs1h(t *testing.T) {
 	if usage.OutputTokens != 8 {
 		t.Fatalf("OutputTokens = %d, want 8", usage.OutputTokens)
 	}
-	if usage.CacheCreationInputTokens != 12 {
-		t.Fatalf("CacheCreationInputTokens = %d, want 12", usage.CacheCreationInputTokens)
+	if usage.CacheCreationInputTokens != 44 {
+		t.Fatalf("CacheCreationInputTokens = %d, want 44", usage.CacheCreationInputTokens)
 	}
 	if usage.CacheReadInputTokens != 16 {
 		t.Fatalf("CacheReadInputTokens = %d, want 16", usage.CacheReadInputTokens)
 	}
-	if usage.CacheCreation.Ephemeral5mInputTokens != 0 {
-		t.Fatalf("CacheCreation.Ephemeral5mInputTokens = %d, want 0", usage.CacheCreation.Ephemeral5mInputTokens)
+	if usage.CacheCreation.Ephemeral5mInputTokens != 20 {
+		t.Fatalf("CacheCreation.Ephemeral5mInputTokens = %d, want 20", usage.CacheCreation.Ephemeral5mInputTokens)
 	}
-	if usage.CacheCreation.Ephemeral1hInputTokens != 12 {
-		t.Fatalf("CacheCreation.Ephemeral1hInputTokens = %d, want 12", usage.CacheCreation.Ephemeral1hInputTokens)
+	if usage.CacheCreation.Ephemeral1hInputTokens != 24 {
+		t.Fatalf("CacheCreation.Ephemeral1hInputTokens = %d, want 24", usage.CacheCreation.Ephemeral1hInputTokens)
 	}
 }
 

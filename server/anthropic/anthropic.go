@@ -10,6 +10,7 @@ import (
 
 	"github.com/realityone/cocoq/server/database/dbrt"
 	"github.com/realityone/cocoq/server/proxy"
+	"github.com/realityone/cocoq/server/sse"
 
 	"github.com/elazarl/goproxy"
 	"github.com/sirupsen/logrus"
@@ -209,6 +210,163 @@ func (p *anthropicProxy) saveUsage(data *UserData, usage proxy.AnthropicUsage) {
 		"account_uuid": record.AccountUUID,
 		"model":        record.Model,
 	}).Debug("saved anthropic usage")
+}
+
+func (p *anthropicProxy) extactUsage(ctx *proxy.OnContext[proxy.RespCtx]) {
+	data := getUserData(ctx.Opaque.ProxyCtx)
+	ctx.Opaque.Metrics.Model = data.Model
+
+	if data.Stream {
+		p.extactUsageFromSSE(ctx)
+		return
+	}
+	p.extactUsageFromBody(ctx)
+}
+
+func (p *anthropicProxy) extactUsageFromBody(ctx *proxy.OnContext[proxy.RespCtx]) {
+	resp := ctx.Opaque.Response
+	if resp.Body == nil {
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Warn("failed to read anthropic api service response body for usage")
+		return
+	}
+	defer resp.Body.Close()
+	proxy.ReplaceResponseBody(resp, body)
+	ctx.Opaque.PostResponse = resp
+
+	usage := proxy.AnthropicUsage{}
+	if done := p.parseUsageTo(body, &usage); !done {
+		logrus.Warn("failed to parse usage from anthropic api service response body")
+		return
+	}
+	p.recordUsage(ctx, usage)
+}
+
+func (p *anthropicProxy) extactUsageFromSSE(ctx *proxy.OnContext[proxy.RespCtx]) {
+	resp := ctx.Opaque.Response
+	events := sse.Forward(resp)
+	userData := getUserData(ctx.Opaque.ProxyCtx)
+
+	usage := proxy.AnthropicUsage{}
+	go func() {
+		defer userData.cancelSession()
+		for event := range events {
+			data, ok := event.Data.(string)
+			if !ok || !sseUsageData([]byte(data)).Exists() {
+				continue
+			}
+			if done := p.parseSSEUsageTo([]byte(data), &usage); !done {
+				continue
+			}
+			p.recordUsage(ctx, usage)
+			logrus.WithField("model", ctx.Opaque.Metrics.Model).
+				WithFields(usageLoggingFields(usage)).
+				Info("extracted usage from anthropic SSE response")
+		}
+	}()
+	ctx.Opaque.PostResponse = resp
+}
+
+func (p *anthropicProxy) recordUsage(ctx *proxy.OnContext[proxy.RespCtx], usage proxy.AnthropicUsage) {
+	userData := getUserData(ctx.Opaque.ProxyCtx)
+	p.saveUsage(userData, usage)
+	ctx.Opaque.Metrics.Usage = usage
+}
+
+func (p *anthropicProxy) parseUsageTo(body []byte, usage *proxy.AnthropicUsage) bool {
+	usageData := gjson.GetBytes(body, "usage")
+	if !usageData.Exists() {
+		logrus.Warn("usage data not found in anthropic api service response body")
+		return false
+	}
+	inputTokens := usageData.Get("input_tokens").Int()
+	outputTokens := usageData.Get("output_tokens").Int()
+	if inputTokens == 0 && outputTokens == 0 {
+		logrus.Warn("input and output tokens are both zero in response usage data, skipping usage recording")
+		return false
+	}
+	usage.InputTokens = inputTokens
+	usage.OutputTokens = outputTokens
+	usage.CacheReadInputTokens = usageData.Get("cache_read_input_tokens").Int()
+	usage.CacheCreationInputTokens = usageData.Get("cache_creation_input_tokens").Int()
+	if usage.CacheCreationInputTokens > 0 {
+		updateCacheCreationBreakdown(usageData, usage)
+	}
+	if usage.CacheCreation.Ephemeral5mInputTokens == 0 && usage.CacheCreation.Ephemeral1hInputTokens == 0 {
+		usage.CacheCreation.Ephemeral1hInputTokens = usage.CacheCreationInputTokens
+	}
+	usage.SetRaw(json.RawMessage(usageData.Raw))
+	return true
+}
+
+func (p *anthropicProxy) parseSSEUsageTo(data []byte, usage *proxy.AnthropicUsage) bool {
+	usageData := sseUsageData(data)
+	if !usageData.Exists() {
+		logrus.Warn("usage data not found in anthropic SSE response event")
+		return false
+	}
+	// The message_start event contains cache creation tokens but not input/output tokens,
+	// while the message_end event contains input/output tokens but may not contain cache creation tokens.
+	// We need to parse both events to get the complete usage data.
+	if gjson.GetBytes(data, "type").String() == "message_start" {
+		usage.CacheCreationInputTokens = usageData.Get("cache_creation_input_tokens").Int()
+		usage.CacheReadInputTokens = usageData.Get("cache_read_input_tokens").Int()
+		if usage.CacheCreationInputTokens > 0 {
+			updateCacheCreationBreakdown(usageData, usage)
+		}
+		return false
+	}
+	inputTokens := usageData.Get("input_tokens").Int()
+	outputTokens := usageData.Get("output_tokens").Int()
+	if inputTokens == 0 && outputTokens == 0 {
+		logrus.Warn("input and output tokens are both zero in anthropic SSE response event usage data, skipping usage recording")
+		return false
+	}
+	usage.InputTokens = inputTokens
+	usage.OutputTokens = outputTokens
+	if cacheCreationInputTokens := usageData.Get("cache_creation_input_tokens").Int(); cacheCreationInputTokens > 0 {
+		usage.CacheCreationInputTokens = cacheCreationInputTokens
+		updateCacheCreationBreakdown(usageData, usage)
+	}
+	if usage.CacheCreationInputTokens > 0 &&
+		usage.CacheCreation.Ephemeral5mInputTokens == 0 &&
+		usage.CacheCreation.Ephemeral1hInputTokens == 0 {
+		// Assume cache creation input tokens are 1h TTL tokens because some Anthropic API services (e.g. openrouter)
+		// does not provide a reliable cache creation breakdown.
+		usage.CacheCreation.Ephemeral1hInputTokens = usage.CacheCreationInputTokens
+	}
+	if cacheReadInputTokens := usageData.Get("cache_read_input_tokens").Int(); cacheReadInputTokens > 0 {
+		usage.CacheReadInputTokens = cacheReadInputTokens
+	}
+	usage.SetRaw(json.RawMessage(usageData.Raw))
+	return true
+}
+
+func sseUsageData(data []byte) gjson.Result {
+	if usageData := gjson.GetBytes(data, "usage"); usageData.Exists() {
+		return usageData
+	}
+	if gjson.GetBytes(data, "type").String() == "message_start" {
+		return gjson.GetBytes(data, "message.usage")
+	}
+	return gjson.Result{}
+}
+
+func updateCacheCreationBreakdown(usageData gjson.Result, usage *proxy.AnthropicUsage) {
+	cacheCreation := usageData.Get("cache_creation")
+	if !cacheCreation.Exists() {
+		return
+	}
+	if ephemeral5m := cacheCreation.Get("ephemeral_5m_input_tokens"); ephemeral5m.Exists() {
+		usage.CacheCreation.Ephemeral5mInputTokens = ephemeral5m.Int()
+	}
+	if ephemeral1h := cacheCreation.Get("ephemeral_1h_input_tokens"); ephemeral1h.Exists() {
+		usage.CacheCreation.Ephemeral1hInputTokens = ephemeral1h.Int()
+	}
 }
 
 func anthropicEventLoggingCondition() goproxy.ReqConditionFunc {
