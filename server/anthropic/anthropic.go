@@ -45,6 +45,10 @@ func NewAnthropicProxy(ca tls.Certificate, db *dbrt.Client) *anthropicProxy {
 		caching1h{},
 		currentDateUTC{},
 	)
+	p.onResponse = append(
+		p.onResponse,
+		proxy.HandlerFunc[proxy.RespCtx](p.extactUsage),
+	)
 	return p
 }
 
