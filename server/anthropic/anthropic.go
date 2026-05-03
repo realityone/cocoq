@@ -400,6 +400,7 @@ func usageLoggingFields(usage proxy.AnthropicUsage) logrus.Fields {
 		"cache_creation_input_tokens":    usage.CacheCreationInputTokens,
 		"cache_creation_5m_input_tokens": usage.CacheCreation.Ephemeral5mInputTokens,
 		"cache_creation_1h_input_tokens": usage.CacheCreation.Ephemeral1hInputTokens,
+		"cache_hit_rate":                 usage.CacheHitRate(),
 	}
 	if raw := usage.GetRaw(); len(raw) > 0 {
 		fields["usage"] = string(raw)
