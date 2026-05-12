@@ -24,6 +24,7 @@ var anthropicProxyDomains = sets.New(
 	"downloads.claude.ai",
 	"platform.claude.com",
 	"raw.githubusercontent.com",
+	"mcp-proxy.anthropic.com",
 )
 
 type anthropicProxy struct {
